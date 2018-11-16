@@ -48,7 +48,7 @@ class PitchDetector(object):
 
         self.cur_pitch = 0
 
-    # Add incoming data to pitch detector. Return estimated pitch as floating point 
+    # Add incoming data to pitch detector. Return estimated pitch as floating point
     # midi value.
     # Returns 0 if a strong pitch is not found.
     def write(self, signal):
@@ -70,7 +70,6 @@ class PitchDetector(object):
         conf = self.pitch_o.get_confidence()
         return pitch, conf
 
-
 # Same as WaveSource interface, but is given audio data explicitly.
 class WaveArray(object):
     def __init__(self, np_array, num_channels):
@@ -89,10 +88,9 @@ class WaveArray(object):
     def get_num_channels(self):
         return self.num_channels
 
-
-# this class is a generator. It does no actual buffering across more than one call. 
-# So underruns/overruns are likely, resulting in pops here and there. 
-# But code is simpler to deal with and it reduces latency. 
+# this class is a generator. It does no actual buffering across more than one call.
+# So underruns/overruns are likely, resulting in pops here and there.
+# But code is simpler to deal with and it reduces latency.
 # Otherwise, it would need a FIFO read-write buffer
 class IOBuffer(object):
     def __init__(self):
@@ -129,162 +127,6 @@ class IOBuffer(object):
         self.buffer = None
         return tmp, True
 
-
-# looks at incoming audio data, detects onsets, and then a little later, classifies the onset as 
-# "kick" or "snare"
-# calls callback function with message argument that is one of "onset", "kick", "snare"
-class OnsetDectior(object):
-    def __init__(self, callback):
-        super(OnsetDectior, self).__init__()
-        self.callback = callback
-
-        self.last_rms = 0
-        self.buffer = FIFOBuffer(4096)
-        self.win_size = 512 # window length for analysis
-        self.min_len = 0.1  # time (in seconds) between onset detection and classification of onset
-
-        self.cur_onset_length = 0 # counts in seconds
-        self.zc = 0               # zero-cross count
-
-        self.active = False # is an onset happening now
-
-    def write(self, signal):
-        # use FIFO Buffer to create same-sized windows for processing
-        self.buffer.write(signal)
-        while self.buffer.get_read_available() >= self.win_size:
-            data = self.buffer.read(self.win_size)
-            self._process_window(data)
-
-    # process a single window of audio, of length self.win_size
-    def _process_window(self, signal):
-        # only look at the difference between current RMS and last RMS
-        rms = np.sqrt(np.mean(signal ** 2))
-        delta = rms - self.last_rms
-        self.last_rms = rms
-
-        # if delta exceeds threshold and not active:
-        if not self.active and delta > 0.003:
-            self.callback('onset')
-            self.active = True
-            self.cur_onset_length = 0  # begin timing onset length
-            self.zc = 0                # begin counting zero-crossings
-
-        self.cur_onset_length += len(signal) / float(Audio.sample_rate)
-
-        # count and accumulate zero crossings:
-        zc = np.count_nonzero(signal[1:] * signal[:-1] < 0)
-        self.zc += zc
-
-        # it's classification time!
-        # classify based on a threshold value of the accumulated zero-crossings.
-        if self.active and self.cur_onset_length > self.min_len:
-            self.active = False
-            # print 'zero cross', self.zc
-            self.callback(('kick', 'snare')[self.zc > 200])
-
-
-# graphical display of a meter
-class MeterDisplay(InstructionGroup):
-    def __init__(self, pos, height, in_range, color):
-        super(MeterDisplay, self).__init__()
-        
-        self.max_height = height
-        self.range = in_range
-
-        # dynamic rectangle for level display
-        self.rect = Rectangle(pos=(1,1), size=(50,self.max_height))
-
-        self.add(PushMatrix())
-        self.add(Translate(*pos))
-
-        # border
-        w = 52
-        h = self.max_height+2
-        self.add(Color(1,1,1))
-        self.add(Line(points=(0,0, 0,h, w,h, w,0, 0,0), width=2))
-
-        # meter
-        self.add(Color(*color))
-        self.add(self.rect)
-
-        self.add(PopMatrix())
-
-    def set(self, level):
-        h = np.interp(level, self.range, (0, self.max_height))
-        self.rect.size = (50, h)
-
-
-# graphical display of onsets as a growing (snare) or shrinking (kick) circle
-class OnsetDisplay(InstructionGroup):
-    def __init__(self, pos):
-        super(OnsetDisplay, self).__init__()
-
-        self.anim = None
-        self.start_sz = 100
-        self.time = 0
-
-        self.color = Color(1,1,1,1)
-        self.circle = CEllipse(cpos=(0,0), csize=(self.start_sz, self.start_sz))
-
-        self.add(PushMatrix())
-        self.add(Translate(*pos))
-        self.add(self.color)        
-        self.add(self.circle)
-        self.add(PopMatrix())
-
-    def set_type(self, t):
-        print(t)
-        if t == 'kick':
-            self.anim = KFAnim((0, 1,1,1,1, self.start_sz), (0.5, 1,0,0,1, 0))
-        else:
-            self.anim = KFAnim((0, 1,1,1,1, self.start_sz), (0.5, 1,1,0,0, self.start_sz*2))
-
-    def on_update(self, dt):
-        if self.anim == None:
-            return True
-
-        self.time += dt
-        r,g,b,a,sz = self.anim.eval(self.time)
-        self.color.rgba = r,g,b,a
-        self.circle.csize = sz, sz
-
-        return self.anim.is_active(self.time)
-
-
-# continuous plotting and scrolling line
-class GraphDisplay(InstructionGroup):
-    def __init__(self, pos, height, num_pts, in_range, color):
-        super(GraphDisplay, self).__init__()
-
-        self.num_pts = num_pts
-        self.range = in_range
-        self.height = height
-        self.points = np.zeros(num_pts*2, dtype = np.int)
-        self.points[::2] = np.arange(num_pts) * 2
-        self.idx = 0
-        self.mode = 'scroll'
-        self.line = Line( width = 1 )
-        self.add(PushMatrix())
-        self.add(Translate(*pos))
-        self.add(Color(*color))
-        self.add(self.line)
-        self.add(PopMatrix())
-
-    def add_point(self, y):
-        y = int( np.interp( y, self.range, (0, self.height) ))
-
-        if self.mode == 'loop':
-            self.points[self.idx + 1] = y
-            self.idx = (self.idx + 2) % len(self.points)
-
-        elif self.mode == 'scroll':
-            self.points[3:self.num_pts*2:2] = self.points[1:self.num_pts*2-2:2]
-            self.points[1] = y
-
-        self.line.points = self.points.tolist()
-
-
-
 class MainWidget1(BaseWidget) :
     def __init__(self):
         super(MainWidget1, self).__init__()
@@ -294,11 +136,9 @@ class MainWidget1(BaseWidget) :
         self.audio.set_generator(self.mixer)
         self.io_buffer = IOBuffer()
         self.mixer.add(self.io_buffer)
-        self.onset_detector = OnsetDectior(self.on_onset)
         self.pitch = PitchDetector()
 
         self.recording = False
-        self.monitor = False
         self.channel_select = 0
         self.input_buffers = []
         self.live_wave = None
@@ -306,27 +146,11 @@ class MainWidget1(BaseWidget) :
         self.info = topleft_label()
         self.add_widget(self.info)
 
-        self.anim_group = AnimGroup()
-
-        self.mic_meter = MeterDisplay((50, 25),  150, (-96, 0), (.1,.9,.3))
-        self.mic_graph = GraphDisplay((110, 25), 150, 300, (-96, 0), (.1,.9,.3))
-
-        self.pitch_meter = MeterDisplay((50, 200), 150, (30, 90), (.9,.1,.3))
-        self.pitch_graph = GraphDisplay((110, 200), 150, 300, (30, 90), (.9,.1,.3))
-
-        self.canvas.add(self.mic_meter)
-        self.canvas.add(self.mic_graph)
-        self.canvas.add(self.pitch_meter)
-        self.canvas.add(self.pitch_graph)
-
-        self.canvas.add(self.anim_group)
-
-        self.onset_disp = None
         self.cur_pitch = 0
 
     def on_update(self) :
         self.audio.on_update()
-        self.anim_group.on_update()
+        # self.anim_group.on_update()
 
         self.info.text = 'fps:%d\n' % kivyClock.get_fps()
         self.info.text += 'load:%.2f\n' % self.audio.get_cpu_load()
@@ -335,7 +159,6 @@ class MainWidget1(BaseWidget) :
 
         self.info.text += "c: analyzing channel:%d\n" % self.channel_select
         self.info.text += "r: toggle recording: %s\n" % ("OFF", "ON")[self.recording]
-        self.info.text += "m: monitor: %s\n" % ("OFF", "ON")[self.monitor]
         self.info.text += "p: playback memory buffer"
 
     def receive_audio(self, frames, num_channels) :
@@ -351,36 +174,14 @@ class MainWidget1(BaseWidget) :
         # display on meter and graph
         rms = np.sqrt(np.mean(mono ** 2))
         rms = np.clip(rms, 1e-10, 1) # don't want log(0)
-        db = 20 * np.log10(rms)      # convert from amplitude to decibels 
-        self.mic_meter.set(db)
-        self.mic_graph.add_point(db)
+        db = 20 * np.log10(rms)      # convert from amplitude to decibels
 
         # pitch detection: get pitch and display on meter and graph
         self.cur_pitch = self.pitch.write(mono)
-        self.pitch_meter.set(self.cur_pitch)
-        self.pitch_graph.add_point(self.cur_pitch)
-
-        # onset detection and classification
-        self.onset_detector.write(mono)
-
-        # optionally send input out to speaker for live playback
-        # note that this will have a ton of latency and is therefore not
-        # practical
-        if self.monitor:
-            self.io_buffer.write(frames)
 
         # record to internal buffer for later playback as a WaveGenerator
         if self.recording:
             self.input_buffers.append(frames)
-
-
-    def on_onset(self, msg):
-        if msg == 'onset':
-            self.onset_disp = OnsetDisplay((randint(650, 750), 100))
-            self.anim_group.add(self.onset_disp)
-        elif self.onset_disp:
-            self.onset_disp.set_type(msg)
-            self.onset_disp = None
 
     def on_key_down(self, keycode, modifiers):
         # toggle recording
@@ -388,10 +189,6 @@ class MainWidget1(BaseWidget) :
             if self.recording:
                 self._process_input()
             self.recording = not self.recording
-
-        # toggle monitoring (ie pipe audio from microphone out to speaker)
-        if keycode[1] == 'm':
-            self.monitor = not self.monitor
 
         # play back live buffer
         if keycode[1] == 'p':
