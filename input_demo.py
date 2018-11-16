@@ -169,6 +169,148 @@ class NoteDisplay(InstructionGroup):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.rect.pos = self.pos
 
+    def get_x_bounds(self):
+        return (self.pos[0], self.pos[0] + self.duration*NOTE_SPEED)
+
+class BeatMatchDisplay(InstructionGroup):
+    def __init__(self, note_info):
+        # note_info is List[(pitch, start_time, duration)]
+        super(BeatMatchDisplay, self).__init__()
+
+        self.add(Line(points=[NOW_BAR_X,0,NOW_BAR_X,Window.height], width=2))
+        self.notes = []
+        for pitch, start_time, duration in note_info:
+            note = NoteDisplay(pitch, start_time, duration)
+            self.add(note)
+            self.notes.append(note)
+
+    # called by Player. Causes the right thing to happen
+    def gem_hit(self, gem_idx):
+        pass
+
+    # called by Player. Causes the right thing to happen
+    def gem_pass(self, gem_idx):
+        pass
+
+    # call every frame to make gems and barlines flow down the screen
+    def on_update(self, dt) :
+        # update all components that animate
+        for note in self.notes:
+            note.on_update(dt)
+
+    def current_note(self):
+        for i in range(len(self.notes)):
+            note = self.notes[i]
+            left, right = note.get_x_bounds()
+            if left <= NOW_BAR_X and right >= NOW_BAR_X:
+                return (i, note.pitch)
+        return None
+
+class Cellist(object):
+    def __init__(self, display):
+        super(Player, self).__init__()
+        self.display = display
+        ## TODO CONTINUE HERE
+
+
+    def get_current_gem_time(self):
+        return self.gem_data[self.current_gem_index]["time"]
+
+    def get_current_gem_note(self):
+        return self.gem_data[self.current_gem_index]["note_num"]
+
+    def go_to_next_gem(self):
+        self.current_gem_index += 1
+        if self.current_gem_index == len(self.gem_data):
+            self.game = True
+            self.current_gem_index = 0
+
+    def is_hit(self, lane):
+        return abs(self.get_current_gem_time() - self.time) <= self.window and self.get_current_gem_note() == lane
+
+    def is_miss(self, lane):
+        return abs(self.get_current_gem_time() - self.time) <= self.window and self.get_current_gem_note() != lane
+
+    def is_pass(self):
+        return self.time - self.get_current_gem_time() > self.window
+
+
+    def passed(self, gem_index):
+        # sounds
+        self.audio_ctrl.set_mute(True)
+
+        # gems
+        self.display.gem_pass(gem_index)
+        self.go_to_next_gem()
+
+        # scoring
+        self.streak = 0
+
+
+    def hit(self, gem_index):
+        # sounds
+        self.audio_ctrl.set_mute(False)
+
+        # gems
+        self.display.gem_hit(gem_index)
+        self.go_to_next_gem()
+
+        # scoring
+        self.score += 1
+        self.streak += 1
+        if (self.streak > self.best_streak):
+            self.best_streak = self.streak
+
+    def missed(self, gem_index):
+        # sounds
+        self.audio_ctrl.set_mute(True)
+        self.audio_ctrl.play_sfx()
+
+        # gems
+        self.display.gem_pass(gem_index)
+        self.go_to_next_gem()
+
+        # scoring
+        self.streak = 0
+
+
+    # called by MainWidget
+    def on_button_down(self, lane):
+        on_hit = False
+
+        #while(self.is_pass()): # in case multiple notes passed?
+        #    self.passed(self.current_gem_index)
+
+        if (self.is_hit(lane)):
+            on_hit = True
+            self.hit(self.current_gem_index)
+
+        elif (self.is_miss(lane)):
+            self.missed(self.current_gem_index)
+
+        # otherwise, do nothing
+
+        self.display.on_button_down(lane, on_hit)
+
+    # called by MainWidget
+    def on_button_up(self, lane):
+        self.display.on_button_up(lane)
+
+    # needed to check if for pass gems (ie, went past the slop window)
+    def on_update(self):
+        self.time += kivyClock.frametime
+        if self.is_pass():
+            self.passed(self.current_gem_index)
+
+    def get_score(self):
+        return self.score
+
+    def get_streak(self):
+        return self.streak
+
+    def get_best_streak(self):
+        return self.best_streak
+
 class MainWidget1(BaseWidget) :
     def __init__(self):
         super(MainWidget1, self).__init__()
@@ -192,7 +334,9 @@ class MainWidget1(BaseWidget) :
 
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
-        self.objects.add(NoteDisplay(50,2,4))
+        self.objects.add(BeatMatchDisplay(
+            [(50,2,4), (51,6,4)]
+        ))
 
     def on_update(self) :
         self.audio.on_update()
