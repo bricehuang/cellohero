@@ -127,6 +127,48 @@ class IOBuffer(object):
         self.buffer = None
         return tmp, True
 
+NOTE_SPEED = 200
+
+NOW_BAR_X = 100
+PADDING = 100
+
+BOTTOM_LANE_PITCH = 48
+TOP_LANE_PITCH = 60
+LANE_HEIGHT = (Window.height - 2 * PADDING) / (TOP_LANE_PITCH - BOTTOM_LANE_PITCH + 1)
+
+# display for a single note at a position
+class NoteDisplay(InstructionGroup):
+    def __init__(self, pitch, start_time, duration):
+        super(NoteDisplay, self).__init__()
+        self.pitch = pitch
+        self.start_time = start_time
+        self.duration = duration
+
+        vert_position = np.interp(
+            pitch,
+            (BOTTOM_LANE_PITCH, TOP_LANE_PITCH),
+            (0+PADDING, Window.height - PADDING - LANE_HEIGHT)
+        )
+        horiz_position = NOW_BAR_X + start_time * NOTE_SPEED
+
+        self.pos = np.array([horiz_position, vert_position])
+
+        self.color = Color(1,1,1)
+        self.add(self.color)
+
+        self.rect = Rectangle(pos=self.pos, size=(duration*NOTE_SPEED, LANE_HEIGHT))
+        self.add(self.rect)
+
+    def on_hit(self):
+        pass
+
+    def on_pass(self):
+        pass
+
+    def on_update(self, dt):
+        self.pos += np.array([-NOTE_SPEED*dt, 0])
+        self.rect.pos = self.pos
+
 class MainWidget1(BaseWidget) :
     def __init__(self):
         super(MainWidget1, self).__init__()
@@ -148,9 +190,13 @@ class MainWidget1(BaseWidget) :
 
         self.cur_pitch = 0
 
+        self.objects = AnimGroup()
+        self.canvas.add(self.objects)
+        self.objects.add(NoteDisplay(50,2,4))
+
     def on_update(self) :
         self.audio.on_update()
-        # self.anim_group.on_update()
+        self.objects.on_update()
 
         self.info.text = 'fps:%d\n' % kivyClock.get_fps()
         self.info.text += 'load:%.2f\n' % self.audio.get_cpu_load()
