@@ -136,13 +136,19 @@ BOTTOM_LANE_PITCH = 48
 TOP_LANE_PITCH = 60
 LANE_HEIGHT = (Window.height - 2 * PADDING) / (TOP_LANE_PITCH - BOTTOM_LANE_PITCH + 1)
 
+
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
+    LIVE = 'live'
+    HIT = 'hit'
+    MISSED = 'missed'
     def __init__(self, pitch, start_time, duration):
         super(NoteDisplay, self).__init__()
         self.pitch = pitch
         self.start_time = start_time
         self.duration = duration
+
+        self.status = NoteDisplay.LIVE
 
         vert_position = np.interp(
             pitch,
@@ -160,10 +166,12 @@ class NoteDisplay(InstructionGroup):
         self.add(self.rect)
 
     def on_hit(self):
-        pass
+        self.status = NoteDisplay.HIT
+        self.color.rgb = (0,1,0)
 
     def on_pass(self):
-        pass
+        self.status = NoteDisplay.MISSED
+        self.color.rgb = (1,0,0)
 
     def on_update(self, dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
@@ -185,12 +193,12 @@ class BeatMatchDisplay(InstructionGroup):
             self.notes.append(note)
 
     # called by Player. Causes the right thing to happen
-    def gem_hit(self, gem_idx):
-        pass
+    def note_hit(self, gem_idx):
+        self.notes[gem_idx].on_hit()
 
     # called by Player. Causes the right thing to happen
-    def gem_pass(self, gem_idx):
-        pass
+    def note_pass(self, gem_idx):
+        self.notes[gem_idx].on_pass()
 
     # call every frame to make gems and barlines flow down the screen
     def on_update(self, dt) :
@@ -206,112 +214,59 @@ class BeatMatchDisplay(InstructionGroup):
                 return (i, note.pitch)
         return None
 
+    def missed_notes(self):
+        idxes = []
+        for i in range(len(self.notes)):
+            note = self.notes[i]
+            left, right = note.get_x_bounds()
+            if note.status == NoteDisplay.LIVE and right < NOW_BAR_X:
+                idxes.append(i)
+        return idxes
+
+ACCEPTABLE_PITCH_INTERVAL = 0.2
 class Cellist(object):
-    def __init__(self, display):
-        super(Player, self).__init__()
+    def __init__(self, display, score_cb):
+        super(Cellist, self).__init__()
         self.display = display
-        ## TODO CONTINUE HERE
+        self.cur_pitch = 0
+        self.score = 0
+        self.score_cb = score_cb
 
+    def notify_pitch(self, pitch):
+        self.cur_pitch = pitch
 
-    def get_current_gem_time(self):
-        return self.gem_data[self.current_gem_index]["time"]
-
-    def get_current_gem_note(self):
-        return self.gem_data[self.current_gem_index]["note_num"]
-
-    def go_to_next_gem(self):
-        self.current_gem_index += 1
-        if self.current_gem_index == len(self.gem_data):
-            self.game = True
-            self.current_gem_index = 0
-
-    def is_hit(self, lane):
-        return abs(self.get_current_gem_time() - self.time) <= self.window and self.get_current_gem_note() == lane
-
-    def is_miss(self, lane):
-        return abs(self.get_current_gem_time() - self.time) <= self.window and self.get_current_gem_note() != lane
-
-    def is_pass(self):
-        return self.time - self.get_current_gem_time() > self.window
-
-
-    def passed(self, gem_index):
-        # sounds
-        self.audio_ctrl.set_mute(True)
-
-        # gems
-        self.display.gem_pass(gem_index)
-        self.go_to_next_gem()
-
-        # scoring
-        self.streak = 0
-
-
-    def hit(self, gem_index):
-        # sounds
-        self.audio_ctrl.set_mute(False)
-
-        # gems
-        self.display.gem_hit(gem_index)
-        self.go_to_next_gem()
-
-        # scoring
-        self.score += 1
-        self.streak += 1
-        if (self.streak > self.best_streak):
-            self.best_streak = self.streak
-
-    def missed(self, gem_index):
-        # sounds
-        self.audio_ctrl.set_mute(True)
-        self.audio_ctrl.play_sfx()
-
-        # gems
-        self.display.gem_pass(gem_index)
-        self.go_to_next_gem()
-
-        # scoring
-        self.streak = 0
-
-
-    # called by MainWidget
-    def on_button_down(self, lane):
-        on_hit = False
-
-        #while(self.is_pass()): # in case multiple notes passed?
-        #    self.passed(self.current_gem_index)
-
-        if (self.is_hit(lane)):
-            on_hit = True
-            self.hit(self.current_gem_index)
-
-        elif (self.is_miss(lane)):
-            self.missed(self.current_gem_index)
-
-        # otherwise, do nothing
-
-        self.display.on_button_down(lane, on_hit)
-
-    # called by MainWidget
-    def on_button_up(self, lane):
-        self.display.on_button_up(lane)
-
-    # needed to check if for pass gems (ie, went past the slop window)
     def on_update(self):
-        self.time += kivyClock.frametime
-        if self.is_pass():
-            self.passed(self.current_gem_index)
+        current_note = self.display.current_note()
+        if current_note is not None:
+            idx, pitch = current_note
+            pitch_diff = np.abs(pitch - self.cur_pitch)
+            if pitch_diff < ACCEPTABLE_PITCH_INTERVAL:
+                if self.display.notes[idx].status == NoteDisplay.LIVE:
+                    self.score += 1000
+                    self.score_cb(self.score)
+                self.display.note_hit(idx)
+        missed_notes = self.display.missed_notes()
+        for idx in missed_notes:
+            self.display.note_pass(idx)
 
-    def get_score(self):
-        return self.score
+SEC_PER_MIN = 60.
+class SongData(object):
+    def __init__(self, filepath):
+        self.notes = []
+        f = open(filepath, 'r')
+        header = f.readline()
+        bpm = float(header.rstrip())
+        bps = bpm / SEC_PER_MIN
 
-    def get_streak(self):
-        return self.streak
+        body_line = f.readline()
+        while body_line:
+            line = body_line.rstrip()
+            pitch, start, duration = line.split()
+            self.notes.append((float(pitch), float(start)/bps, float(duration)/bps))
+            body_line = f.readline()
+        f.close()
 
-    def get_best_streak(self):
-        return self.best_streak
-
-class MainWidget1(BaseWidget) :
+class MainWidget1(BaseWidget):
     def __init__(self):
         super(MainWidget1, self).__init__()
 
@@ -331,25 +286,36 @@ class MainWidget1(BaseWidget) :
         self.add_widget(self.info)
 
         self.cur_pitch = 0
+        self.song_data = SongData('input.txt')
 
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
-        self.objects.add(BeatMatchDisplay(
-            [(50,2,4), (51,6,4)]
-        ))
+        self.display = BeatMatchDisplay(self.song_data.notes)
+        self.objects.add(self.display)
+
+        self.cellist = Cellist(self.display, self.update_score)
+        self.score = 0
+
+        # note_names = ['C3','C#3','D3','Eb3','E3','F3','F#3','G3','Ab3','A3','Bb3','B3','C4']
+        # def _build_note(text, lane):
+        #     with self.canvas:
+        #         label = Label(font_size=40)
+        #         label.pos = (10,PADDING + 26 + (lane + 0.5) * LANE_HEIGHT )
+        #         label.text = text
+        # _build_note('C3',0)
+        # _build_note('D3',2)
+        # _build_note('C#3',1)
+
+    def update_score(self, score):
+        self.score = score
 
     def on_update(self) :
         self.audio.on_update()
+        self.cellist.on_update()
         self.objects.on_update()
 
-        self.info.text = 'fps:%d\n' % kivyClock.get_fps()
-        self.info.text += 'load:%.2f\n' % self.audio.get_cpu_load()
-        self.info.text += 'gain:%.2f\n' % self.mixer.get_gain()
-        self.info.text += "pitch: %.1f\n" % self.cur_pitch
-
-        self.info.text += "c: analyzing channel:%d\n" % self.channel_select
-        self.info.text += "r: toggle recording: %s\n" % ("OFF", "ON")[self.recording]
-        self.info.text += "p: playback memory buffer"
+        self.info.text = "pitch: %.1f\n" % self.cur_pitch
+        self.info.text += "score: %d\n" % self.score
 
     def receive_audio(self, frames, num_channels) :
         # handle 1 or 2 channel input.
@@ -368,6 +334,7 @@ class MainWidget1(BaseWidget) :
 
         # pitch detection: get pitch and display on meter and graph
         self.cur_pitch = self.pitch.write(mono)
+        self.cellist.notify_pitch(self.cur_pitch)
 
         # record to internal buffer for later playback as a WaveGenerator
         if self.recording:
