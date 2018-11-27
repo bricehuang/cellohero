@@ -136,6 +136,8 @@ BOTTOM_LANE_PITCH = 48
 TOP_LANE_PITCH = 60
 LANE_HEIGHT = (Window.height - 2 * PADDING) / (TOP_LANE_PITCH - BOTTOM_LANE_PITCH + 1)
 
+PERCENT_NOTE_TO_HIT = .8
+
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
@@ -165,20 +167,39 @@ class NoteDisplay(InstructionGroup):
         self.rect = Rectangle(pos=self.pos, size=(duration*NOTE_SPEED, LANE_HEIGHT))
         self.add(self.rect)
 
-    def on_hit(self):
-        self.status = NoteDisplay.HIT
-        self.color.rgb = (0,1,0)
+        self.duration_hit = 0
+        self.duration_passed = 0
 
-    def on_pass(self):
+    def on_hit(self, dt):
+        self.status = NoteDisplay.HIT
+        #self.color.rgb = (0,1,0)
+        self.duration_passed += dt
+        self.duration_hit += dt
+
+    def on_pass(self, dt):
         self.status = NoteDisplay.MISSED
         self.color.rgb = (1,0,0)
+        self.duration_passed += dt
 
     def on_update(self, dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.rect.pos = self.pos
+        if self.status == NoteDisplay.HIT:
+            self.color.rgb = (0, min(1, self.duration_hit/self.duration * .8 + .4), 0)
+
 
     def get_x_bounds(self):
         return (self.pos[0], self.pos[0] + self.duration*NOTE_SPEED)
+
+    def enough_note_hit(self, out_of_total): 
+    # percent of note is float, out_of_total is boolean true if out of total duration, false if so far in duration played
+        if out_of_total:
+            return self.duration_hit/self.duration >= PERCENT_NOTE_TO_HIT
+        else:
+            if self.duration_passed == 0:
+                return False
+            return self.duration_hit/self.duration_passed >= PERCENT_NOTE_TO_HIT
+
 
 class BeatMatchDisplay(InstructionGroup):
     def __init__(self, note_info):
@@ -193,12 +214,12 @@ class BeatMatchDisplay(InstructionGroup):
             self.notes.append(note)
 
     # called by Player. Causes the right thing to happen
-    def note_hit(self, gem_idx):
-        self.notes[gem_idx].on_hit()
+    def note_hit(self, gem_idx, time_passed):
+        self.notes[gem_idx].on_hit(time_passed)
 
     # called by Player. Causes the right thing to happen
-    def note_pass(self, gem_idx):
-        self.notes[gem_idx].on_pass()
+    def note_pass(self, gem_idx, time_passed):
+        self.notes[gem_idx].on_pass(time_passed)
 
     # call every frame to make gems and barlines flow down the screen
     def on_update(self, dt) :
@@ -223,6 +244,9 @@ class BeatMatchDisplay(InstructionGroup):
                 idxes.append(i)
         return idxes
 
+    def enough_note_hit(self, gem_idx, out_of_total):
+        return self.notes[gem_idx].enough_note_hit(out_of_total)
+
 ACCEPTABLE_PITCH_INTERVAL = 0.2
 class Cellist(object):
     def __init__(self, display, score_cb):
@@ -236,18 +260,19 @@ class Cellist(object):
         self.cur_pitch = pitch
 
     def on_update(self):
+        time_passed = kivyClock.frametime
         current_note = self.display.current_note()
         if current_note is not None:
             idx, pitch = current_note
             pitch_diff = np.abs(pitch - self.cur_pitch)
             if pitch_diff < ACCEPTABLE_PITCH_INTERVAL:
-                if self.display.notes[idx].status == NoteDisplay.LIVE:
-                    self.score += 1000
+                if not self.display.enough_note_hit(idx, True):
+                    self.score += 1000 * time_passed
                     self.score_cb(self.score)
-                self.display.note_hit(idx)
+                    self.display.note_hit(idx, time_passed)
         missed_notes = self.display.missed_notes()
         for idx in missed_notes:
-            self.display.note_pass(idx)
+            self.display.note_pass(idx, time_passed)
 
 SEC_PER_MIN = 60.
 class SongData(object):
