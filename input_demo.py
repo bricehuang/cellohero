@@ -136,13 +136,16 @@ STAFF_LEFT_X = 100
 NOW_BAR_X = 250
 PADDING = 100
 NOW_BAR_VERT_OVERHANG = 100
-NOTE_RECT_MARGIN = 5
+NOTE_RECT_MARGIN = 2
 
 MIDDLE_C_ID = 28
+E2_ID = 16
 LANE_HEIGHT = 50
 LANE_SEP = LANE_HEIGHT/2
 STAFF_Y_VALS = (500,550,600,650,700)
 MID_C_LOWER_Y = STAFF_Y_VALS[-1]+LANE_SEP
+
+NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
 
 PERCENT_NOTE_TO_HIT = .8
 ACCEPTABLE_PITCH_INTERVAL = 0.2
@@ -161,7 +164,7 @@ class TuningArrow(InstructionGroup):
     def __init__(self, pos, direction):
         super(TuningArrow, self).__init__()
         self.pos = pos
-        self.default_size = 50 
+        self.default_size = 50
 
         #self.arrow = CEllipse(cpos = self.pos, csize = (self.default_size), segments = 3)
         self.color = Color(1,0,0,0)
@@ -217,7 +220,7 @@ class TuningArrow(InstructionGroup):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.arrow.cpos = self.pos
 
-    def is_on(self): 
+    def is_on(self):
         return self.status == TuningArrow.ON
 
 class IntonationDisplay(InstructionGroup):
@@ -251,7 +254,7 @@ class IntonationDisplay(InstructionGroup):
         else:
             if(abs(amount_out_of_tune) > 1):
                 size_multiplier = 2
-            else: 
+            else:
                 size_multiplier = int(np.interp(abs(amount_out_of_tune), (0, 1), (.5, 2)))
 
             if(amount_out_of_tune > 0): # too high
@@ -261,7 +264,7 @@ class IntonationDisplay(InstructionGroup):
                 up_arrow.turn_on(size_multiplier)
                 down_arrow.turn_off()
 
-        # turn off the previous note's arrows 
+        # turn off the previous note's arrows
         if gem_idx > 0:
             if self.atleast_one_arrow_on(gem_idx - 1):
                 self.get_up_arrow(gem_idx - 1).turn_off()
@@ -276,6 +279,133 @@ class IntonationDisplay(InstructionGroup):
     def get_down_arrow(self, gem_idx):
         return self.arrows[gem_idx][TuningArrow.DOWN]
 
+LEDGER_LINE_WIDTH = 50
+class LedgerLine(InstructionGroup):
+    def __init__(self, note, left_px):
+        super(LedgerLine, self).__init__()
+        assert (note%2 == 0 and (note >= MIDDLE_C_ID or note <= E2_ID))
+        self.color = Color(.8,.8,.2)
+        self.add(self.color)
+        self.pos = np.array((left_px, note_to_lower_left(note) + LANE_SEP))
+        self.line = Line(points=[self.pos[0],self.pos[1],self.pos[0]+LEDGER_LINE_WIDTH,self.pos[1]],width=2)
+        self.add(self.line)
+
+    def on_update(self,dt):
+        self.pos += np.array([-NOTE_SPEED*dt, 0])
+        self.line.points = [self.pos[0],self.pos[1],self.pos[0]+LEDGER_LINE_WIDTH,self.pos[1]]
+
+    @staticmethod
+    def get_ledger_lines(note, left_px):
+        if (note < MIDDLE_C_ID and note > E2_ID):
+            return []
+        elif (note >= MIDDLE_C_ID):
+            return [LedgerLine(note2, left_px) for note2 in range(MIDDLE_C_ID, note+1, 2)]
+        else:
+            return [LedgerLine(note2, left_px) for note2 in range(E2_ID, note-1, -2)]
+
+STEM_LENGTH=75
+class NoteFigure(InstructionGroup):
+    def __init__(self, note, left_px, duration_beats):
+        super(NoteFigure, self).__init__()
+        beats = round(duration_beats, 1)
+        self.note = note
+        self.add(Color(.8,.8,.2))
+        self.pos = np.array((left_px + 3, note_to_lower_left(note) + 3))
+        self.head = Ellipse(pos=self.pos, size=(2*NOTE_RADIUS,2*NOTE_RADIUS), segments=40)
+        self.add(self.head)
+
+        self.stem = None
+        if duration_beats in {0.5,1.,1.5,2.,3.}:
+            if self.note >= 22:
+                self.stem = Line(points=[
+                    self.pos[0],
+                    self.pos[1] + NOTE_RADIUS,
+                    self.pos[0],
+                    self.pos[1] + NOTE_RADIUS - STEM_LENGTH
+                ], width=2)
+            else:
+                self.stem = Line(points=[
+                    self.pos[0] + 2*NOTE_RADIUS,
+                    self.pos[1] + NOTE_RADIUS,
+                    self.pos[0] + 2*NOTE_RADIUS,
+                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH
+                ], width=2)
+            self.add(self.stem)
+
+        self.flag = None
+        if duration_beats in {0.5}:
+            if self.note >= 22:
+                self.flag = Line(points=[
+                    self.pos[0],
+                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH,
+                    self.pos[0] - 25,
+                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH + 50,
+                ], width=2)
+            else:
+                self.flag = Line(points=[
+                    self.pos[0] + 2*NOTE_RADIUS,
+                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH,
+                    self.pos[0] + 2*NOTE_RADIUS + 25,
+                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH - 50
+                ], width=2)
+            self.add(self.flag)
+
+        self.dot = None
+        if duration_beats in {1.5,3.}:
+            if self.note >= 22:
+                self.dot = Ellipse(pos = self.pos+np.array((45,0)), size=(12,12), segments=40)
+            else:
+                self.dot = Ellipse(pos = self.pos+np.array((-7,36)), size=(12,12), segments=40)
+            self.add(self.dot)
+
+
+        self.add(Color(1,1,1))
+        self.headcenter = None
+        if duration_beats in {2.,3.,4.}:
+            self.headcenter = Ellipse(pos=self.pos+np.array((8,8)), size=(2*(NOTE_RADIUS-8),2*(NOTE_RADIUS-8)), segments=40)
+            self.add(self.headcenter)
+
+
+    def on_update(self, dt):
+        self.pos += np.array([-NOTE_SPEED*dt, 0])
+        self.head.pos = self.pos
+        if self.headcenter is not None:
+            self.headcenter.pos = self.pos+np.array((8,8))
+        if self.stem is not None:
+            if self.note >= 22:
+                self.stem.points = [
+                    self.pos[0],
+                    self.pos[1] + NOTE_RADIUS,
+                    self.pos[0],
+                    self.pos[1] + NOTE_RADIUS-STEM_LENGTH
+                ]
+            else:
+                self.stem.points =[
+                    self.pos[0] + 2*NOTE_RADIUS,
+                    self.pos[1] + NOTE_RADIUS,
+                    self.pos[0] + 2*NOTE_RADIUS,
+                    self.pos[1] + NOTE_RADIUS+STEM_LENGTH
+                ]
+        if self.flag is not None:
+            if self.note >= 22:
+                self.flag.points=[
+                    self.pos[0],
+                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH,
+                    self.pos[0] - 25,
+                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH + 50,
+                ]
+            else:
+                self.flag.points = [
+                    self.pos[0] + 2*NOTE_RADIUS,
+                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH,
+                    self.pos[0] + 2*NOTE_RADIUS + 25,
+                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH - 50
+                ]
+        if self.dot is not None:
+            if self.note >= 22:
+                self.dot.pos = self.pos+np.array((45,0))
+            else:
+                self.dot.pos = self.pos+np.array((-7,36))
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
@@ -310,16 +440,26 @@ class NoteDisplay(InstructionGroup):
         self.rect = Rectangle(pos=self.pos, size=(duration_time*NOTE_SPEED, LANE_HEIGHT-2*NOTE_RECT_MARGIN))
         self.add(self.rect)
 
+        # ledger lines
+        self.ledger_lines = LedgerLine.get_ledger_lines(self.noteid, self.pos[0])
+        for ll in self.ledger_lines:
+            self.add(ll)
+
+        # note head
+        self.figure = NoteFigure(self.noteid, self.pos[0], self.duration_beats)
+        self.add(self.figure)
+        # self.add(Line(points=[700,750,800,750],width=2))
+
         self.duration_hit = 0
         self.duration_passed = 0
 
         #arrow_buffer = 50
 
         # self.up_arrow_position = np.array([
-        #     self.rect.pos[0] + .5 * self.rect.size[0], 
+        #     self.rect.pos[0] + .5 * self.rect.size[0],
         #     self.rect.pos[1] + .5 * self.rect.size[1] - arrow_buffer])
         # self.down_arrow_position = np.array([
-        #     self.rect.pos[0] + .5 * self.rect.size[0], 
+        #     self.rect.pos[0] + .5 * self.rect.size[0],
         #     self.rect.pos[1] + .5 * self.rect.size[1] + arrow_buffer])
 
         # print ("up: ", up_arrow_position)
@@ -339,6 +479,10 @@ class NoteDisplay(InstructionGroup):
         self.duration_passed += dt
 
     def on_update(self, dt):
+        for ll in self.ledger_lines:
+            ll.on_update(dt)
+        self.figure.on_update(dt)
+
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.rect.pos = self.pos
         if self.status == NoteDisplay.HIT:
@@ -364,11 +508,34 @@ class NoteDisplay(InstructionGroup):
     def get_down_arrow_pos(self):
         return self.down_arrow_position
 
+class BarLine(InstructionGroup):
+    def __init__(self, time):
+        super(BarLine, self).__init__()
+        self.color = Color(1,1,1)
+        self.add(self.color)
+
+        self.x = NOW_BAR_X + time*NOTE_SPEED
+        self.line = Line(
+            points=[
+                self.x,
+                STAFF_Y_VALS[0],
+                self.x,
+                STAFF_Y_VALS[-1]
+            ],
+            width=1
+        )
+        self.add(self.line)
+
+    def on_update(self, dt):
+        self.x -= NOTE_SPEED*dt
+        self.line.points = [self.x, STAFF_Y_VALS[0], self.x, STAFF_Y_VALS[-1]]
+
 class BeatMatchDisplay(InstructionGroup):
-    def __init__(self, note_info):
+    def __init__(self, song_data):
         # note_info is List[(parsed_pitch, start_time, duration)]
         super(BeatMatchDisplay, self).__init__()
-
+        note_info = song_data.notes
+        bar_info = song_data.barlines
 
         # draw staff lines
         self.add(Color(1,1,1))
@@ -381,6 +548,12 @@ class BeatMatchDisplay(InstructionGroup):
             note = NoteDisplay(parsed_pitch, start_time, duration)
             self.add(note)
             self.notes.append(note)
+
+        self.bars = []
+        for bar_time in bar_info:
+            bar = BarLine(bar_time)
+            self.add(bar)
+            self.bars.append(bar)
 
         # this makes note content disappear once it passes the now bar
         self.add(Color(0,0,0))
@@ -445,7 +618,11 @@ class BeatMatchDisplay(InstructionGroup):
         # update all components that animate
         for note in self.notes:
             note.on_update(dt)
+
         self.intonationDisplay.on_update(dt)
+
+        for bar in self.bars:
+            bar.on_update(dt)
 
     def current_note(self):
         for i in range(len(self.notes)):
@@ -526,17 +703,24 @@ class SongData(object):
         bpm = float(header.rstrip())
         bps = bpm / SEC_PER_MIN
 
+        beats_per_measure = f.readline()
+        beats_per_measure = int(beats_per_measure.rstrip())
+
         body_line = f.readline()
         while body_line:
             line = body_line.rstrip()
             str_pitch, start, duration = line.split()
             self.notes.append((
                 parse_pitch(str_pitch),
-                (float(start)/bps, start),
-                (float(duration)/bps, duration)
+                (float(start)/bps, float(start)),
+                (float(duration)/bps, float(duration))
             ))
             body_line = f.readline()
         f.close()
+        last_note = self.notes[-1]
+        last_beat = last_note[1][1] + last_note[2][1]
+        last_barline_beat = np.ceil(last_beat / beats_per_measure) * beats_per_measure
+        self.barlines = [float(beats_per_measure + bar)/bps for bar in range(0, int(last_barline_beat), beats_per_measure)]
 
 class MainWidget1(BaseWidget):
     def __init__(self):
@@ -562,7 +746,7 @@ class MainWidget1(BaseWidget):
 
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
-        self.display = BeatMatchDisplay(self.song_data.notes)
+        self.display = BeatMatchDisplay(self.song_data)
         self.objects.add(self.display)
 
         self.cellist = Cellist(self.display, self.update_score)
@@ -589,7 +773,7 @@ class MainWidget1(BaseWidget):
         # button1.bind(state = self.select_song_callback)
         # self.add_widget(button1)
 
-    # button callback    
+    # button callback
     # def select_song_callback(self, instance, value):
     #     print ("instance: ", instance, " value: ", value)
 
