@@ -129,42 +129,54 @@ class IOBuffer(object):
 
 NOTE_SPEED = 200
 
-NOW_BAR_X = 100
+STAFF_LEFT_X = 100
+NOW_BAR_X = 250
 PADDING = 100
+NOW_BAR_VERT_OVERHANG = 100
+NOTE_RECT_MARGIN = 5
 
-BOTTOM_LANE_PITCH = 48
-TOP_LANE_PITCH = 60
-LANE_HEIGHT = (Window.height - 2 * PADDING) / (TOP_LANE_PITCH - BOTTOM_LANE_PITCH + 1)
+MIDDLE_C_ID = 28
+LANE_HEIGHT = 50
+LANE_SEP = LANE_HEIGHT/2
+STAFF_Y_VALS = (500,550,600,650,700)
+MID_C_LOWER_Y = STAFF_Y_VALS[-1]+LANE_SEP
 
 PERCENT_NOTE_TO_HIT = .8
 
+def note_to_lower_left(noteid):
+    return MID_C_LOWER_Y + (noteid - MIDDLE_C_ID)*LANE_SEP
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
     LIVE = 'live'
     HIT = 'hit'
     MISSED = 'missed'
-    def __init__(self, pitch, start_time, duration):
+    def __init__(self, parsed_pitch, start_time_and_beats, duration_and_beats):
         super(NoteDisplay, self).__init__()
+        pitch, noteid, acc = parsed_pitch
         self.pitch = pitch
+        self.noteid = noteid
+        self.acc = acc
+
+        start_time, start_beats = start_time_and_beats
         self.start_time = start_time
-        self.duration = duration
+        self.start_beats = start_beats
+
+        duration_time, duration_beats = duration_and_beats
+        self.duration_time = duration_time
+        self.duration_beats = duration_beats
 
         self.status = NoteDisplay.LIVE
 
-        vert_position = np.interp(
-            pitch,
-            (BOTTOM_LANE_PITCH, TOP_LANE_PITCH),
-            (0+PADDING, Window.height - PADDING - LANE_HEIGHT)
-        )
+        vert_position = note_to_lower_left(noteid)
         horiz_position = NOW_BAR_X + start_time * NOTE_SPEED
 
-        self.pos = np.array([horiz_position, vert_position])
+        self.pos = np.array([horiz_position, vert_position+NOTE_RECT_MARGIN])
 
         self.color = Color(1,1,1)
         self.add(self.color)
 
-        self.rect = Rectangle(pos=self.pos, size=(duration*NOTE_SPEED, LANE_HEIGHT))
+        self.rect = Rectangle(pos=self.pos, size=(duration_time*NOTE_SPEED, LANE_HEIGHT-2*NOTE_RECT_MARGIN))
         self.add(self.rect)
 
         self.duration_hit = 0
@@ -185,16 +197,16 @@ class NoteDisplay(InstructionGroup):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.rect.pos = self.pos
         if self.status == NoteDisplay.HIT:
-            self.color.rgb = (0, min(1, self.duration_hit/self.duration * .8 + .4), 0)
+            self.color.rgb = (0, min(1, self.duration_hit/self.duration_time * .8 + .4), 0)
 
 
     def get_x_bounds(self):
-        return (self.pos[0], self.pos[0] + self.duration*NOTE_SPEED)
+        return (self.pos[0], self.pos[0] + self.duration_time*NOTE_SPEED)
 
-    def enough_note_hit(self, out_of_total): 
+    def enough_note_hit(self, out_of_total):
     # percent of note is float, out_of_total is boolean true if out of total duration, false if so far in duration played
         if out_of_total:
-            return self.duration_hit/self.duration >= PERCENT_NOTE_TO_HIT
+            return self.duration_hit/self.duration_time >= PERCENT_NOTE_TO_HIT
         else:
             if self.duration_passed == 0:
                 return False
@@ -203,15 +215,51 @@ class NoteDisplay(InstructionGroup):
 
 class BeatMatchDisplay(InstructionGroup):
     def __init__(self, note_info):
-        # note_info is List[(pitch, start_time, duration)]
+        # note_info is List[(parsed_pitch, start_time, duration)]
         super(BeatMatchDisplay, self).__init__()
 
-        self.add(Line(points=[NOW_BAR_X,0,NOW_BAR_X,Window.height], width=2))
+
+        # draw staff lines
+        self.add(Color(1,1,1))
+        for y in STAFF_Y_VALS:
+            self.add(Line(points=[NOW_BAR_X,y,Window.width,y], width=2))
+
+        self.add(Line(points=[NOW_BAR_X,STAFF_Y_VALS[0],NOW_BAR_X,STAFF_Y_VALS[-1]], width=2))
         self.notes = []
-        for pitch, start_time, duration in note_info:
-            note = NoteDisplay(pitch, start_time, duration)
+        for parsed_pitch, start_time, duration in note_info:
+            note = NoteDisplay(parsed_pitch, start_time, duration)
             self.add(note)
             self.notes.append(note)
+
+        # this makes note content disappear once it passes the now bar
+        self.add(Color(0,0,0))
+        self.add(Rectangle(pos=(0,0),size=(NOW_BAR_X,Window.height-200)))
+
+        # draw part of staff left of now bar
+        self.add(Color(1,1,1))
+        for y in STAFF_Y_VALS:
+            self.add(Line(points=[STAFF_LEFT_X,y,NOW_BAR_X,y], width=2))
+        self.add(Line(
+            points=[
+                STAFF_LEFT_X,
+                STAFF_Y_VALS[0],
+                STAFF_LEFT_X,
+                STAFF_Y_VALS[-1],
+            ],
+            width=2)
+        )
+
+        # draw now bar
+        self.add(Line(
+            points=[
+                NOW_BAR_X,
+                STAFF_Y_VALS[0]-NOW_BAR_VERT_OVERHANG,
+                NOW_BAR_X,
+                STAFF_Y_VALS[-1]+NOW_BAR_VERT_OVERHANG
+            ],
+            width=2)
+        )
+
 
     # called by Player. Causes the right thing to happen
     def note_hit(self, gem_idx, time_passed):
@@ -274,6 +322,25 @@ class Cellist(object):
         for idx in missed_notes:
             self.display.note_pass(idx, time_passed)
 
+PITCHES_IN_OCTAVE = 12
+MIDI_ADJ = 12
+NOTES_IN_OCTAVE = 7
+NOTE_TO_MIDI = {'C':0, 'D':2, 'E':4, 'F':5, 'G':7, 'A':9, 'B':11}
+ACC_TO_MIDI_ADJUST = {'#':1, '':0, 'b':-1}
+NOTE_TO_ID = {'C':0, 'D':1, 'E':2, 'F':3, 'G':4, 'A':5, 'B':6}
+def parse_pitch(str_pitch):
+    if str_pitch[1] in {'#','b'}:
+        note = str_pitch[0]
+        acc = str_pitch[1]
+        octave = int(str_pitch[2:])
+    else:
+        note = str_pitch[0]
+        acc = ''
+        octave = int(str_pitch[1:])
+    midi = NOTE_TO_MIDI[note] + ACC_TO_MIDI_ADJUST[acc] + octave*PITCHES_IN_OCTAVE + MIDI_ADJ
+    note = NOTE_TO_ID[note] + octave * NOTES_IN_OCTAVE
+    return (midi, note, acc)
+
 SEC_PER_MIN = 60.
 class SongData(object):
     def __init__(self, filepath):
@@ -286,8 +353,12 @@ class SongData(object):
         body_line = f.readline()
         while body_line:
             line = body_line.rstrip()
-            pitch, start, duration = line.split()
-            self.notes.append((float(pitch), float(start)/bps, float(duration)/bps))
+            str_pitch, start, duration = line.split()
+            self.notes.append((
+                parse_pitch(str_pitch),
+                (float(start)/bps, start),
+                (float(duration)/bps, duration)
+            ))
             body_line = f.readline()
         f.close()
 
