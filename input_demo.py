@@ -26,6 +26,9 @@ from buffers import *
 from kivy.graphics.instructions import InstructionGroup
 from kivy.graphics import Color, Ellipse, Rectangle, Line
 from kivy.graphics import PushMatrix, PopMatrix, Translate, Scale, Rotate
+#from kivy.core.image import Image
+from kivy.uix.image import Image
+from kivy.uix.button import Button
 
 from random import randint
 import aubio
@@ -142,9 +145,137 @@ STAFF_Y_VALS = (500,550,600,650,700)
 MID_C_LOWER_Y = STAFF_Y_VALS[-1]+LANE_SEP
 
 PERCENT_NOTE_TO_HIT = .8
+ACCEPTABLE_PITCH_INTERVAL = 0.2
 
 def note_to_lower_left(noteid):
     return MID_C_LOWER_Y + (noteid - MIDDLE_C_ID)*LANE_SEP
+
+class TuningArrow(InstructionGroup):
+    ON = "on"
+    OFF = "off"
+
+    UP = "up"
+    DOWN = "down"
+
+
+    def __init__(self, pos, direction):
+        super(TuningArrow, self).__init__()
+        self.pos = pos
+        self.default_size = 50 
+
+        #self.arrow = CEllipse(cpos = self.pos, csize = (self.default_size), segments = 3)
+        self.color = Color(1,0,0,0)
+
+        # Attempt to upload picture
+        if direction == TuningArrow.UP:
+            source = 'arrow_up.png'
+        else:
+            source = 'arrow_down.png'
+
+        texture = Image(source = source).texture
+
+        self.arrow = CRectangle(texture = texture, cpos=self.pos, csize=(self.default_size, self.default_size))
+
+        self.status = TuningArrow.OFF
+        self.direction = direction
+
+        # Attempt to rotate
+        #self.status = TuningArrow.ON
+        #angle = 200
+        #self.rotation = Rotate() #(axis = (1,0,0), angle= angle)
+        #self.rotation.set(200, 1, 0, 0)
+        #self.anti_rotation = Rotate() #(axis = (1,0,0), angle= -angle)
+        #self.anti_rotation.set(90, 0, 0, 1)
+        #self.add(self.rotation)
+        self.add(self.color)
+        self.add(self.arrow)
+        #self.add(self.anti_rotation)
+
+
+    def turn_on(self, size = None):
+        if self.status == TuningArrow.OFF:
+            self.color.a = 1
+
+            if size:
+                self.set_size(size)
+            else:
+                self.set_size(1)
+
+            self.status = TuningArrow.ON
+
+
+    def turn_off(self):
+        if self.status == TuningArrow.ON:
+            self.color.a = 0
+            self.status = TuningArrow.OFF
+
+    def set_size(self, size_multiplier):
+        size = self.default_size * size_multiplier
+        self.arrow.csize = (size, size)
+
+    def on_update(self, dt):
+        self.pos += np.array([-NOTE_SPEED*dt, 0])
+        self.arrow.cpos = self.pos
+
+    def is_on(self): 
+        return self.status == TuningArrow.ON
+
+class IntonationDisplay(InstructionGroup):
+    def __init__(self, up_arrow_positions, down_arrow_positions):
+        super(IntonationDisplay, self).__init__()
+        self.arrows = []
+        for i in range(len(up_arrow_positions)):
+            up_arrow = TuningArrow(up_arrow_positions[i], TuningArrow.UP)
+            down_arrow = TuningArrow(down_arrow_positions[i], TuningArrow.DOWN)
+            self.arrows.append({
+                TuningArrow.UP: up_arrow,
+                TuningArrow.DOWN: down_arrow
+                })
+            self.add(up_arrow)
+            self.add(down_arrow)
+
+        self.size_multiplier = 10
+
+    def on_update(self, dt):
+        for i in range(len(self.arrows)):
+            self.get_up_arrow(i).on_update(dt)
+            self.get_down_arrow(i).on_update(dt)
+
+    def change_intonation_display(self, amount_out_of_tune, gem_idx): # positive amount_out_of_tune = too high
+        up_arrow = self.get_up_arrow(gem_idx)
+        down_arrow = self.get_down_arrow(gem_idx)
+
+        if(abs(amount_out_of_tune) <= ACCEPTABLE_PITCH_INTERVAL):
+            up_arrow.turn_off()
+            down_arrow.turn_off()
+        else:
+            if(abs(amount_out_of_tune) > 1):
+                size_multiplier = 2
+            else: 
+                size_multiplier = int(np.interp(abs(amount_out_of_tune), (0, 1), (.5, 2)))
+
+            if(amount_out_of_tune > 0): # too high
+                down_arrow.turn_on(size_multiplier)
+                up_arrow.turn_off()
+            else:
+                up_arrow.turn_on(size_multiplier)
+                down_arrow.turn_off()
+
+        # turn off the previous note's arrows 
+        if gem_idx > 0:
+            if self.atleast_one_arrow_on(gem_idx - 1):
+                self.get_up_arrow(gem_idx - 1).turn_off()
+                self.get_down_arrow(gem_idx - 1).turn_off()
+
+    def atleast_one_arrow_on(self, gem_idx):
+        return self.get_up_arrow(gem_idx).is_on() or self.get_down_arrow(gem_idx).is_on()
+
+    def get_up_arrow(self, gem_idx):
+        return self.arrows[gem_idx][TuningArrow.UP]
+
+    def get_down_arrow(self, gem_idx):
+        return self.arrows[gem_idx][TuningArrow.DOWN]
+
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
@@ -182,6 +313,20 @@ class NoteDisplay(InstructionGroup):
         self.duration_hit = 0
         self.duration_passed = 0
 
+        #arrow_buffer = 50
+
+        # self.up_arrow_position = np.array([
+        #     self.rect.pos[0] + .5 * self.rect.size[0], 
+        #     self.rect.pos[1] + .5 * self.rect.size[1] - arrow_buffer])
+        # self.down_arrow_position = np.array([
+        #     self.rect.pos[0] + .5 * self.rect.size[0], 
+        #     self.rect.pos[1] + .5 * self.rect.size[1] + arrow_buffer])
+
+        # print ("up: ", up_arrow_position)
+        # self.intonationManager = IntonationManager(up_arrow_position, down_arrow_position)
+        # self.add(self.intonationManager)
+
+
     def on_hit(self, dt):
         self.status = NoteDisplay.HIT
         #self.color.rgb = (0,1,0)
@@ -199,7 +344,6 @@ class NoteDisplay(InstructionGroup):
         if self.status == NoteDisplay.HIT:
             self.color.rgb = (0, min(1, self.duration_hit/self.duration_time * .8 + .4), 0)
 
-
     def get_x_bounds(self):
         return (self.pos[0], self.pos[0] + self.duration_time*NOTE_SPEED)
 
@@ -212,6 +356,13 @@ class NoteDisplay(InstructionGroup):
                 return False
             return self.duration_hit/self.duration_passed >= PERCENT_NOTE_TO_HIT
 
+    def get_center_position(self):
+        return np.array([self.pos[0] + .5 * self.rect.size[0], self.pos[1] - NOTE_RECT_MARGIN])
+
+    def get_up_arrow_pos(self):
+        return self.up_arrow_position
+    def get_down_arrow_pos(self):
+        return self.down_arrow_position
 
 class BeatMatchDisplay(InstructionGroup):
     def __init__(self, note_info):
@@ -260,6 +411,26 @@ class BeatMatchDisplay(InstructionGroup):
             width=2)
         )
 
+        # draw bass clef
+        self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(NOW_BAR_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
+        self.add(self.bassClef)
+
+        # draw bear
+        #self.bear = Rectangle(texture = Image(source = "images/good_job_bear.gif").texture, pos=(0, 0), size=(400,400))
+        #self.add(self.bear)
+
+
+        # add intonation adjustion arrows
+        ARROW_BUFFER = 200
+        up_arrow_positions = []
+        down_arrow_positions = []
+        for note in self.notes:
+            center_position = note.get_center_position()
+            up_arrow_positions.append(center_position - np.array([0, ARROW_BUFFER]))
+            down_arrow_positions.append(center_position + np.array([0, ARROW_BUFFER]))
+        self.intonationDisplay = IntonationDisplay(up_arrow_positions, down_arrow_positions)
+        self.add(self.intonationDisplay)
+
 
     # called by Player. Causes the right thing to happen
     def note_hit(self, gem_idx, time_passed):
@@ -274,6 +445,7 @@ class BeatMatchDisplay(InstructionGroup):
         # update all components that animate
         for note in self.notes:
             note.on_update(dt)
+        self.intonationDisplay.on_update(dt)
 
     def current_note(self):
         for i in range(len(self.notes)):
@@ -295,7 +467,9 @@ class BeatMatchDisplay(InstructionGroup):
     def enough_note_hit(self, gem_idx, out_of_total):
         return self.notes[gem_idx].enough_note_hit(out_of_total)
 
-ACCEPTABLE_PITCH_INTERVAL = 0.2
+    def inform_pitch_diff(self, gem_idx, pitch_difference):
+        self.intonationDisplay.change_intonation_display(pitch_difference, gem_idx)
+
 class Cellist(object):
     def __init__(self, display, score_cb):
         super(Cellist, self).__init__()
@@ -313,6 +487,8 @@ class Cellist(object):
         if current_note is not None:
             idx, pitch = current_note
             pitch_diff = np.abs(pitch - self.cur_pitch)
+            self.display.inform_pitch_diff(idx, self.cur_pitch - pitch)
+            #print ("current pitch: ", self.cur_pitch, "playing_pitch: ", pitch)
             if pitch_diff < ACCEPTABLE_PITCH_INTERVAL:
                 if not self.display.enough_note_hit(idx, True):
                     self.score += 1000 * time_passed
@@ -402,6 +578,21 @@ class MainWidget1(BaseWidget):
         # _build_note('D3',2)
         # _build_note('C#3',1)
 
+
+        # BEAR ANIMATION!
+        bear_size = 500
+        self.bear = Image(source = "images/good_job_bear.gif", size = (bear_size, bear_size), pos = (Window.width/2 - bear_size/2, 0)) #Rectangle(texture = Image(source = "images/good_job_bear.gif").texture, pos=(0, 0), size=(400,400))
+        self.add_widget(self.bear)
+
+        # BUTTON EXAMPLE
+        # button1 = Button(text = 'Mary Had a Litte Lamb', size = (500, 300), font_size = 40)
+        # button1.bind(state = self.select_song_callback)
+        # self.add_widget(button1)
+
+    # button callback    
+    # def select_song_callback(self, instance, value):
+    #     print ("instance: ", instance, " value: ", value)
+
     def update_score(self, score):
         self.score = score
 
@@ -450,6 +641,10 @@ class MainWidget1(BaseWidget):
 
         if keycode[1] == 'c' and NUM_CHANNELS == 2:
             self.channel_select = 1 - self.channel_select
+
+        # changing bear image
+        if keycode[1] == '1':
+            self.bear.source = 'images/spinning_bear.gif'
 
         # adjust mixer gain
         gf = lookup(keycode[1], ('up', 'down'), (1.1, 1/1.1))
