@@ -588,11 +588,6 @@ class BeatMatchDisplay(InstructionGroup):
         self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(NOW_BAR_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
         self.add(self.bassClef)
 
-        # draw bear
-        #self.bear = Rectangle(texture = Image(source = "images/good_job_bear.gif").texture, pos=(0, 0), size=(400,400))
-        #self.add(self.bear)
-
-
         # add intonation adjustion arrows
         ARROW_BUFFER = 200
         up_arrow_positions = []
@@ -700,6 +695,7 @@ class SongData(object):
         self.notes = []
         f = open(filepath, 'r')
         header = f.readline()
+        print('THIS IS THE HEADER %s' % header)
         bpm = float(header.rstrip())
         bps = bpm / SEC_PER_MIN
 
@@ -723,6 +719,7 @@ class SongData(object):
         self.barlines = [float(beats_per_measure + bar)/bps for bar in range(0, int(last_barline_beat), beats_per_measure)]
 
 class MainWidget1(BaseWidget):
+    BEAR_SIZE = 500
     def __init__(self):
         super(MainWidget1, self).__init__()
 
@@ -732,25 +729,25 @@ class MainWidget1(BaseWidget):
         self.io_buffer = IOBuffer()
         self.mixer.add(self.io_buffer)
         self.pitch = PitchDetector()
+        self.cur_pitch = 0
 
         self.recording = False
         self.channel_select = 0
         self.input_buffers = []
         self.live_wave = None
 
+        self.in_game_mode = False
         self.info = topleft_label()
+        self.info.text = ""
         self.add_widget(self.info)
-
-        self.cur_pitch = 0
-        self.song_data = SongData('input.txt')
 
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
-        self.display = BeatMatchDisplay(self.song_data)
-        self.objects.add(self.display)
 
-        self.cellist = Cellist(self.display, self.update_score)
         self.score = 0
+        self.song_data = None
+        self.display = None
+        self.cellist = None
 
         # note_names = ['C3','C#3','D3','Eb3','E3','F3','F#3','G3','Ab3','A3','Bb3','B3','C4']
         # def _build_note(text, lane):
@@ -763,30 +760,57 @@ class MainWidget1(BaseWidget):
         # _build_note('C#3',1)
 
 
+        # CELLO HERO
+        self.logo = Image(source = "images/cellohero.png", size = (Window.width/2, Window.height/4), pos = (Window.width/4, Window.height*2/3))
+        self.add_widget(self.logo)
+
         # BEAR ANIMATION!
-        bear_size = 500
-        self.bear = Image(source = "images/good_job_bear.gif", size = (bear_size, bear_size), pos = (Window.width/2 - bear_size/2, 0)) #Rectangle(texture = Image(source = "images/good_job_bear.gif").texture, pos=(0, 0), size=(400,400))
+        self.bear = Image(source = "images/going_to_practice_bear.gif", size = (self.BEAR_SIZE, self.BEAR_SIZE), pos = (Window.width/2 - self.BEAR_SIZE/2, Window.height/4))
         self.add_widget(self.bear)
 
         # BUTTON EXAMPLE
-        # button1 = Button(text = 'Mary Had a Litte Lamb', size = (500, 300), font_size = 40)
-        # button1.bind(state = self.select_song_callback)
-        # self.add_widget(button1)
+        self.buttons = []
+        self.create_button('C Major Scale', 'cmaj', (0,0))
+        self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
+        self.create_button('Rigadoon', 'rigadoon', (1000,0))
+
+    def create_button(self, text, id, pos):
+        button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40)
+        button.bind(state= self.select_song_callback)
+        self.add_widget(button)
+        self.buttons.append(button)
 
     # button callback
-    # def select_song_callback(self, instance, value):
-    #     print ("instance: ", instance, " value: ", value)
+    def select_song_callback(self, instance, value):
+        if value == 'down':
+            self.start_song('music/'+instance.id+'.txt')
+
+    def start_song(self, filename):
+        for button in self.buttons:
+            self.remove_widget(button)
+        self.buttons = []
+
+        self.bear.pos = (Window.width/2 - self.BEAR_SIZE/2, 0)
+        self.bear.source = "images/good_job_bear.gif"
+
+        self.in_game_mode = True
+
+        self.song_data = SongData(filename)
+        self.display = BeatMatchDisplay(self.song_data)
+        self.cellist = Cellist(self.display, self.update_score)
+        self.objects.add(self.display)
 
     def update_score(self, score):
         self.score = score
 
     def on_update(self) :
-        self.audio.on_update()
-        self.cellist.on_update()
-        self.objects.on_update()
+        if self.in_game_mode:
+            self.audio.on_update()
+            self.cellist.on_update()
+            self.objects.on_update()
 
-        self.info.text = "pitch: %.1f\n" % self.cur_pitch
-        self.info.text += "score: %d\n" % self.score
+            self.info.text = "pitch: %.1f\n" % self.cur_pitch
+            self.info.text += "score: %d\n" % self.score
 
     def receive_audio(self, frames, num_channels) :
         # handle 1 or 2 channel input.
@@ -828,7 +852,11 @@ class MainWidget1(BaseWidget):
 
         # changing bear image
         if keycode[1] == '1':
-            self.bear.source = 'images/spinning_bear.gif'
+            self.bear.source = 'images/cello_smash.gif'
+        if keycode[1] == '2':
+            self.bear.source = 'images/clapping_bear.gif'
+        if keycode[1] == '3':
+            self.bear.source = 'images/good_job_bear.gif'
 
         # adjust mixer gain
         gf = lookup(keycode[1], ('up', 'down'), (1.1, 1/1.1))
