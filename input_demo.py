@@ -643,12 +643,13 @@ class BeatMatchDisplay(InstructionGroup):
         self.intonationDisplay.change_intonation_display(pitch_difference, gem_idx)
 
 class Cellist(object):
-    def __init__(self, display, score_cb):
+    def __init__(self, display, score_cb, end_game_cb):
         super(Cellist, self).__init__()
         self.display = display
         self.cur_pitch = 0
         self.score = 0
         self.score_cb = score_cb
+        self.end_game_cb = end_game_cb
 
     def notify_pitch(self, pitch):
         self.cur_pitch = pitch
@@ -669,6 +670,10 @@ class Cellist(object):
         missed_notes = self.display.missed_notes()
         for idx in missed_notes:
             self.display.note_pass(idx, time_passed)
+
+        if self.display.bars[-1].x < NOW_BAR_X:
+            # we're done
+            self.end_game_cb(self.score)
 
 PITCHES_IN_OCTAVE = 12
 MIDI_ADJ = 12
@@ -695,7 +700,6 @@ class SongData(object):
         self.notes = []
         f = open(filepath, 'r')
         header = f.readline()
-        print('THIS IS THE HEADER %s' % header)
         bpm = float(header.rstrip())
         bps = bpm / SEC_PER_MIN
 
@@ -718,6 +722,9 @@ class SongData(object):
         last_barline_beat = np.ceil(last_beat / beats_per_measure) * beats_per_measure
         self.barlines = [float(beats_per_measure + bar)/bps for bar in range(0, int(last_barline_beat), beats_per_measure)]
 
+START_MENU = "start"
+IN_GAME = "game"
+END_GAME = "end"
 class MainWidget1(BaseWidget):
     BEAR_SIZE = 500
     def __init__(self):
@@ -736,7 +743,7 @@ class MainWidget1(BaseWidget):
         self.input_buffers = []
         self.live_wave = None
 
-        self.in_game_mode = False
+        self.state = START_MENU
         self.info = topleft_label()
         self.info.text = ""
         self.add_widget(self.info)
@@ -749,30 +756,26 @@ class MainWidget1(BaseWidget):
         self.display = None
         self.cellist = None
 
-        # note_names = ['C3','C#3','D3','Eb3','E3','F3','F#3','G3','Ab3','A3','Bb3','B3','C4']
-        # def _build_note(text, lane):
-        #     with self.canvas:
-        #         label = Label(font_size=40)
-        #         label.pos = (10,PADDING + 26 + (lane + 0.5) * LANE_HEIGHT )
-        #         label.text = text
-        # _build_note('C3',0)
-        # _build_note('D3',2)
-        # _build_note('C#3',1)
-
-
         # CELLO HERO
-        self.logo = Image(source = "images/cellohero.png", size = (Window.width/2, Window.height/4), pos = (Window.width/4, Window.height*2/3))
+        self.logo = Image(
+            source = "images/cellohero.png",
+            size = (Window.width/2, Window.height/4),
+            pos = (Window.width/4, Window.height*2/3)
+        )
         self.add_widget(self.logo)
 
         # BEAR ANIMATION!
-        self.bear = Image(source = "images/going_to_practice_bear.gif", size = (self.BEAR_SIZE, self.BEAR_SIZE), pos = (Window.width/2 - self.BEAR_SIZE/2, Window.height/4))
+        self.bear = Image(
+            source = "images/going_to_practice_bear.gif",
+            size = (self.BEAR_SIZE, self.BEAR_SIZE),
+            pos = (Window.width/2 - self.BEAR_SIZE/2, Window.height/4)
+        )
         self.add_widget(self.bear)
 
-        # BUTTON EXAMPLE
-        self.buttons = []
-        self.create_button('C Major Scale', 'cmaj', (0,0))
-        self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
-        self.create_button('Rigadoon', 'rigadoon', (1000,0))
+        self.reset_button = None
+        self.replay_button = None
+        self.song_name = None
+        self.reset()
 
     def create_button(self, text, id, pos):
         button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40)
@@ -783,28 +786,81 @@ class MainWidget1(BaseWidget):
     # button callback
     def select_song_callback(self, instance, value):
         if value == 'down':
-            self.start_song('music/'+instance.id+'.txt')
+            self.start_song(instance.id)
 
     def start_song(self, filename):
+        # start screen -> game
+        self.state = IN_GAME
+        self.song_name = filename
+
         for button in self.buttons:
             self.remove_widget(button)
         self.buttons = []
+        self.clear_end_screen_buttons()
 
         self.bear.pos = (Window.width/2 - self.BEAR_SIZE/2, 0)
         self.bear.source = "images/good_job_bear.gif"
 
-        self.in_game_mode = True
-
-        self.song_data = SongData(filename)
+        self.song_data = SongData('music/'+filename+'.txt')
         self.display = BeatMatchDisplay(self.song_data)
-        self.cellist = Cellist(self.display, self.update_score)
+        self.cellist = Cellist(self.display, self.update_score, self.end_song)
         self.objects.add(self.display)
+
+    def clear_end_screen_buttons(self):
+        if self.reset_button:
+            self.remove_widget(self.reset_button)
+            self.reset_button = None
+        if self.replay_button:
+            self.remove_widget(self.replay_button)
+            self.replay_button = None
+
+    # called by game logic at game end
+    # rating is 1,2,3 (bad, good, excellent)
+    def end_song(self, score):
+        # game -> end screen
+        self.state = END_GAME
+
+        self.info.text = ""
+
+        self.objects.remove(self.display)
+        self.song_data = None
+        self.display = None
+        self.cellist = None
+
+        self.reset_button = Button(text='Main Menu', pos=(0,100), size=(500,200), font_size=40)
+        self.reset_button.bind(state= self.reset_callback)
+        self.add_widget(self.reset_button)
+
+        self.replay_button = Button(text='Play Again', id=self.song_name, pos=(1000,100), size=(500,200), font_size=40)
+        self.replay_button.bind(state=self.select_song_callback)
+        self.add_widget(self.replay_button)
+
+    def reset_callback(self, instance, value):
+        if value == 'down':
+            self.reset()
+
+    # reset to start screen
+    def reset(self):
+        # reset bear
+        self.bear.source = "images/going_to_practice_bear.gif"
+        self.bear.pos = (Window.width/2 - self.BEAR_SIZE/2, Window.height/4)
+
+        # reset whatever state
+        self.song_name = None
+
+        # set up buttons
+        self.clear_end_screen_buttons()
+
+        self.buttons = []
+        self.create_button('C Major Scale', 'cmaj', (0,0))
+        self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
+        self.create_button('Rigadoon', 'rigadoon', (1000,0))
 
     def update_score(self, score):
         self.score = score
 
     def on_update(self) :
-        if self.in_game_mode:
+        if self.state == IN_GAME:
             self.audio.on_update()
             self.cellist.on_update()
             self.objects.on_update()
