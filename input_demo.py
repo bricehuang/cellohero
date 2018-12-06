@@ -147,6 +147,7 @@ MID_C_LOWER_Y = STAFF_Y_VALS[-1]+LANE_SEP
 
 NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
 
+NOTE_SCORE_RATE = 1000
 PERCENT_NOTE_TO_HIT = .8
 ACCEPTABLE_PITCH_INTERVAL = 0.2
 
@@ -534,6 +535,7 @@ class BeatMatchDisplay(InstructionGroup):
     def __init__(self, song_data):
         # note_info is List[(parsed_pitch, start_time, duration)]
         super(BeatMatchDisplay, self).__init__()
+        self.max_score = song_data.max_score
         note_info = song_data.notes
         bar_info = song_data.barlines
 
@@ -642,6 +644,8 @@ class BeatMatchDisplay(InstructionGroup):
     def inform_pitch_diff(self, gem_idx, pitch_difference):
         self.intonationDisplay.change_intonation_display(pitch_difference, gem_idx)
 
+GOOD_CUTOFF = 0.6
+EXCELLENT_CUTOFF = 0.9
 class Cellist(object):
     def __init__(self, display, score_cb, end_game_cb):
         super(Cellist, self).__init__()
@@ -664,7 +668,7 @@ class Cellist(object):
             #print ("current pitch: ", self.cur_pitch, "playing_pitch: ", pitch)
             if pitch_diff < ACCEPTABLE_PITCH_INTERVAL:
                 if not self.display.enough_note_hit(idx, True):
-                    self.score += 1000 * time_passed
+                    self.score += NOTE_SCORE_RATE * time_passed
                     self.score_cb(self.score)
                     self.display.note_hit(idx, time_passed)
         missed_notes = self.display.missed_notes()
@@ -673,7 +677,13 @@ class Cellist(object):
 
         if self.display.bars[-1].x < NOW_BAR_X:
             # we're done
-            self.end_game_cb(self.score)
+            max_score = self.display.max_score
+            rating = (
+                1 +
+                (1 if self.score >= GOOD_CUTOFF*max_score else 0) +
+                (1 if self.score >= EXCELLENT_CUTOFF*max_score else 0)
+            )
+            self.end_game_cb(self.score, rating)
 
 PITCHES_IN_OCTAVE = 12
 MIDI_ADJ = 12
@@ -721,6 +731,8 @@ class SongData(object):
         last_beat = last_note[1][1] + last_note[2][1]
         last_barline_beat = np.ceil(last_beat / beats_per_measure) * beats_per_measure
         self.barlines = [float(beats_per_measure + bar)/bps for bar in range(0, int(last_barline_beat), beats_per_measure)]
+
+        self.max_score = NOTE_SCORE_RATE * PERCENT_NOTE_TO_HIT * sum(duration[0] for _, _, duration in self.notes)
 
 START_MENU = "start"
 IN_GAME = "game"
@@ -816,11 +828,18 @@ class MainWidget1(BaseWidget):
 
     # called by game logic at game end
     # rating is 1,2,3 (bad, good, excellent)
-    def end_song(self, score):
+    def end_song(self, score, rating):
         # game -> end screen
         self.state = END_GAME
 
         self.info.text = ""
+
+        if rating == 1:
+            self.bear.source = "images/cello_smash.gif"
+        elif rating == 2:
+            self.bear.source = "images/okay_bear.gif"
+        elif rating == 3:
+            self.bear.source = "images/clapping_bear.gif"
 
         self.objects.remove(self.display)
         self.song_data = None
@@ -831,7 +850,7 @@ class MainWidget1(BaseWidget):
         self.reset_button.bind(state= self.reset_callback)
         self.add_widget(self.reset_button)
 
-        self.replay_button = Button(text='Play Again', id=self.song_name, pos=(1000,100), size=(500,200), font_size=40)
+        self.replay_button = Button(text='Play Again', id=self.song_name, pos=(1100,100), size=(500,200), font_size=40)
         self.replay_button.bind(state=self.select_song_callback)
         self.add_widget(self.replay_button)
 
