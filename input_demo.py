@@ -29,11 +29,12 @@ from kivy.graphics import PushMatrix, PopMatrix, Translate, Scale, Rotate
 #from kivy.core.image import Image
 from kivy.uix.image import Image
 from kivy.uix.button import Button
+from kivy.uix.label import Label
 
 from random import randint
 import aubio
 
-NUM_CHANNELS = 2
+NUM_CHANNELS = 1
 
 class PitchDetector(object):
     def __init__(self):
@@ -787,6 +788,7 @@ class MainWidget1(BaseWidget):
         self.reset_button = None
         self.replay_button = None
         self.song_name = None
+        self.score_label = None
         self.reset()
 
     def create_button(self, text, id, pos):
@@ -825,6 +827,9 @@ class MainWidget1(BaseWidget):
         if self.replay_button:
             self.remove_widget(self.replay_button)
             self.replay_button = None
+        if self.score_label:
+            self.remove_widget(self.score_label)
+            self.score_label = None
 
     # called by game logic at game end
     # rating is 1,2,3 (bad, good, excellent)
@@ -832,7 +837,12 @@ class MainWidget1(BaseWidget):
         # game -> end screen
         self.state = END_GAME
 
-        self.info.text = ""
+        self.score_label = Label(text= "Score: %d\n" % score, pos = (Window.width/2, Window.height/2), font_size = "40sp")
+        self.add_widget(self.score_label)
+
+        if self.info:
+            self.remove_widget(self.info)
+            self.info = None
 
         if rating == 1:
             self.bear.source = "images/cello_smash.gif"
@@ -870,6 +880,12 @@ class MainWidget1(BaseWidget):
         # set up buttons
         self.clear_end_screen_buttons()
 
+        # set up text in the corner
+        if not self.info:
+            self.info = topleft_label()
+            self.info.text = ""
+            self.add_widget(self.info)
+
         self.buttons = []
         self.create_button('C Major Scale', 'cmaj', (0,0))
         self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
@@ -884,8 +900,9 @@ class MainWidget1(BaseWidget):
             self.cellist.on_update()
             self.objects.on_update()
 
-            self.info.text = "pitch: %.1f\n" % self.cur_pitch
-            self.info.text += "score: %d\n" % self.score
+            if self.info:
+                self.info.text = "pitch: %.1f\n" % self.cur_pitch
+                self.info.text += "score: %d\n" % self.score
 
     def receive_audio(self, frames, num_channels) :
         # handle 1 or 2 channel input.
