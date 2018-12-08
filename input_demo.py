@@ -33,8 +33,10 @@ from kivy.uix.label import Label
 
 from random import randint
 import aubio
+import math
+import numpy as np
 
-NUM_CHANNELS = 1
+NUM_CHANNELS = 2
 
 class PitchDetector(object):
     def __init__(self):
@@ -155,131 +157,86 @@ ACCEPTABLE_PITCH_INTERVAL = 0.2
 def note_to_lower_left(noteid):
     return MID_C_LOWER_Y + (noteid - MIDDLE_C_ID)*LANE_SEP
 
-class TuningArrow(InstructionGroup):
-    ON = "on"
-    OFF = "off"
+class FeedbackArrow(InstructionGroup):
+    def __init__(self,):
+        super(FeedbackArrow, self).__init__()
 
-    UP = "up"
-    DOWN = "down"
+        self.number_last_pitches_to_consider = 3
+        self.outlier_pitch_amt = 2
 
+        self.horiz_position = NOW_BAR_X - 100
+        self.vert_position = Window.height/2
+        self.size = (100, 50)
 
-    def __init__(self, pos, direction):
-        super(TuningArrow, self).__init__()
-        self.pos = pos
-        self.default_size = 50
+        self.color = Color(1,1,1,0)
 
-        #self.arrow = CEllipse(cpos = self.pos, csize = (self.default_size), segments = 3)
-        self.color = Color(1,0,0,0)
+        self.arrow = CRectangle(texture = Image(source = 'arrow_right.png').texture, cpos=(self.horiz_position, self.vert_position), csize=self.size)
 
-        # Attempt to upload picture
-        if direction == TuningArrow.UP:
-            source = 'arrow_up.png'
-        else:
-            source = 'arrow_down.png'
+        self.angle = 0
 
-        texture = Image(source = source).texture
+        rotation_origin = (self.arrow.get_cpos()[0] + self.size[0] * .5, self.arrow.get_cpos()[1] + self.size[1] * .5, ) #furtherest right
 
-        self.arrow = CRectangle(texture = texture, cpos=self.pos, csize=(self.default_size, self.default_size))
+        self.rotation = Rotate(axis = (0,0,1), angle= self.angle, origin = rotation_origin)
+        self.anti_rotation = Rotate(axis = (0,0,1), angle= - self.angle, origin = rotation_origin)
 
-        self.status = TuningArrow.OFF
-        self.direction = direction
-
-        # Attempt to rotate
-        #self.status = TuningArrow.ON
-        #angle = 200
-        #self.rotation = Rotate() #(axis = (1,0,0), angle= angle)
-        #self.rotation.set(200, 1, 0, 0)
-        #self.anti_rotation = Rotate() #(axis = (1,0,0), angle= -angle)
-        #self.anti_rotation.set(90, 0, 0, 1)
-        #self.add(self.rotation)
+        self.add(self.rotation)
         self.add(self.color)
         self.add(self.arrow)
-        #self.add(self.anti_rotation)
+        self.add(self.anti_rotation)
 
+        self.last_heard_pitches = []
 
-    def turn_on(self, size = None):
-        if self.status == TuningArrow.OFF:
-            self.color.a = 1
+    def set_visible(self):
+        self.color.a = 1
 
-            if size:
-                self.set_size(size)
+    def set_invisible(self):
+        self.color.a = 0
+
+    def set_vertical_position(self, y_pos):
+        self.vert_position = y_pos
+        self.arrow.cpos = (self.horiz_position, self.vert_position)
+
+    def set_rotation(self, angle = 0):
+        self.arrow.angle = angle
+        self.rotation.angle = self.arrow.angle
+        self.anti_rotation.angle = -self.arrow.angle
+
+    def include_accidental(self, accidental): # accidental = "flat", "natural", "sharp", "none"
+        pass
+
+    def on_update(self, dt, current_expected_note, pitch_heard):
+        if len(self.last_heard_pitches) < self.number_last_pitches_to_consider or abs(pitch_heard - np.mean(self.last_heard_pitches)) < self.outlier_pitch_amt:
+            if pitch_heard > 35:
+                self.set_visible()
+                self.set_rotation() # reset orientation to 0
+                
+                pitch_heard_closest = int(pitch_heard)
+                if pitch_heard_closest % 12 in MIDI_TO_NOTE:
+                    sharp_needed = False
+                    midi_note = MIDI_TO_NOTE[pitch_heard_closest % 12]
+                    octave = math.floor(pitch_heard_closest/12)
+                else:
+                    sharp_needed = True
+                    midi_note = MIDI_TO_NOTE[(pitch_heard_closest - 1) % 12]
+                    octave = math.floor((pitch_heard_closest - 1)/12)
+                position = NOTE_TO_ID[midi_note] + 1 + (octave - 1) * NOTES_IN_OCTAVE
+                place_here = note_to_lower_left(position)
+                self.set_vertical_position(place_here)
+
+                if current_expected_note:
+                    if abs(current_expected_note.pitch - pitch_heard) < 1:
+                        angle = np.interp(current_expected_note.pitch - pitch_heard, (-1, 1), (-90,90))
+                        self.set_rotation(angle)
+                    else:
+                        print("too far away")
+                else:
+                    print("no expected note")
             else:
-                self.set_size(1)
+                self.set_invisible()
 
-            self.status = TuningArrow.ON
+        self.last_heard_pitches.append(pitch_heard)
+        self.last_heard_pitches = self.last_heard_pitches[-self.number_last_pitches_to_consider:]
 
-
-    def turn_off(self):
-        if self.status == TuningArrow.ON:
-            self.color.a = 0
-            self.status = TuningArrow.OFF
-
-    def set_size(self, size_multiplier):
-        size = self.default_size * size_multiplier
-        self.arrow.csize = (size, size)
-
-    def on_update(self, dt):
-        self.pos += np.array([-NOTE_SPEED*dt, 0])
-        self.arrow.cpos = self.pos
-
-    def is_on(self):
-        return self.status == TuningArrow.ON
-
-class IntonationDisplay(InstructionGroup):
-    def __init__(self, up_arrow_positions, down_arrow_positions):
-        super(IntonationDisplay, self).__init__()
-        self.arrows = []
-        for i in range(len(up_arrow_positions)):
-            up_arrow = TuningArrow(up_arrow_positions[i], TuningArrow.UP)
-            down_arrow = TuningArrow(down_arrow_positions[i], TuningArrow.DOWN)
-            self.arrows.append({
-                TuningArrow.UP: up_arrow,
-                TuningArrow.DOWN: down_arrow
-                })
-            self.add(up_arrow)
-            self.add(down_arrow)
-
-        self.size_multiplier = 10
-
-    def on_update(self, dt):
-        for i in range(len(self.arrows)):
-            self.get_up_arrow(i).on_update(dt)
-            self.get_down_arrow(i).on_update(dt)
-
-    def change_intonation_display(self, amount_out_of_tune, gem_idx): # positive amount_out_of_tune = too high
-        up_arrow = self.get_up_arrow(gem_idx)
-        down_arrow = self.get_down_arrow(gem_idx)
-
-        if(abs(amount_out_of_tune) <= ACCEPTABLE_PITCH_INTERVAL):
-            up_arrow.turn_off()
-            down_arrow.turn_off()
-        else:
-            if(abs(amount_out_of_tune) > 1):
-                size_multiplier = 2
-            else:
-                size_multiplier = int(np.interp(abs(amount_out_of_tune), (0, 1), (.5, 2)))
-
-            if(amount_out_of_tune > 0): # too high
-                down_arrow.turn_on(size_multiplier)
-                up_arrow.turn_off()
-            else:
-                up_arrow.turn_on(size_multiplier)
-                down_arrow.turn_off()
-
-        # turn off the previous note's arrows
-        if gem_idx > 0:
-            if self.atleast_one_arrow_on(gem_idx - 1):
-                self.get_up_arrow(gem_idx - 1).turn_off()
-                self.get_down_arrow(gem_idx - 1).turn_off()
-
-    def atleast_one_arrow_on(self, gem_idx):
-        return self.get_up_arrow(gem_idx).is_on() or self.get_down_arrow(gem_idx).is_on()
-
-    def get_up_arrow(self, gem_idx):
-        return self.arrows[gem_idx][TuningArrow.UP]
-
-    def get_down_arrow(self, gem_idx):
-        return self.arrows[gem_idx][TuningArrow.DOWN]
 
 LEDGER_LINE_WIDTH = 50
 class LedgerLine(InstructionGroup):
@@ -560,7 +517,7 @@ class BeatMatchDisplay(InstructionGroup):
 
         # this makes note content disappear once it passes the now bar
         self.add(Color(0,0,0))
-        self.add(Rectangle(pos=(0,0),size=(NOW_BAR_X,Window.height-200)))
+        self.add(Rectangle(pos=(0,0),size=(NOW_BAR_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
 
         # draw part of staff left of now bar
         self.add(Color(1,1,1))
@@ -592,16 +549,17 @@ class BeatMatchDisplay(InstructionGroup):
         self.add(self.bassClef)
 
         # add intonation adjustion arrows
-        ARROW_BUFFER = 200
-        up_arrow_positions = []
-        down_arrow_positions = []
-        for note in self.notes:
-            center_position = note.get_center_position()
-            up_arrow_positions.append(center_position - np.array([0, ARROW_BUFFER]))
-            down_arrow_positions.append(center_position + np.array([0, ARROW_BUFFER]))
-        self.intonationDisplay = IntonationDisplay(up_arrow_positions, down_arrow_positions)
-        self.add(self.intonationDisplay)
-
+        # ARROW_BUFFER = 200
+        # up_arrow_positions = []
+        # down_arrow_positions = []
+        # for note in self.notes:
+        #     center_position = note.get_center_position()
+        #     up_arrow_positions.append(center_position - np.array([0, ARROW_BUFFER]))
+        #     down_arrow_positions.append(center_position + np.array([0, ARROW_BUFFER]))
+        # self.intonationDisplay = IntonationDisplay(up_arrow_positions, down_arrow_positions)
+        # self.add(self.intonationDisplay)
+        self.arrow_feedback = FeedbackArrow()
+        self.add(self.arrow_feedback)
 
     # called by Player. Causes the right thing to happen
     def note_hit(self, gem_idx, time_passed):
@@ -617,7 +575,7 @@ class BeatMatchDisplay(InstructionGroup):
         for note in self.notes:
             note.on_update(dt)
 
-        self.intonationDisplay.on_update(dt)
+        #self.intonationDisplay.on_update(dt)
 
         for bar in self.bars:
             bar.on_update(dt)
@@ -642,9 +600,6 @@ class BeatMatchDisplay(InstructionGroup):
     def enough_note_hit(self, gem_idx, out_of_total):
         return self.notes[gem_idx].enough_note_hit(out_of_total)
 
-    def inform_pitch_diff(self, gem_idx, pitch_difference):
-        self.intonationDisplay.change_intonation_display(pitch_difference, gem_idx)
-
 GOOD_CUTOFF = 0.6
 EXCELLENT_CUTOFF = 0.9
 class Cellist(object):
@@ -665,8 +620,6 @@ class Cellist(object):
         if current_note is not None:
             idx, pitch = current_note
             pitch_diff = np.abs(pitch - self.cur_pitch)
-            self.display.inform_pitch_diff(idx, self.cur_pitch - pitch)
-            #print ("current pitch: ", self.cur_pitch, "playing_pitch: ", pitch)
             if pitch_diff < ACCEPTABLE_PITCH_INTERVAL:
                 if not self.display.enough_note_hit(idx, True):
                     self.score += NOTE_SCORE_RATE * time_passed
@@ -686,10 +639,18 @@ class Cellist(object):
             )
             self.end_game_cb(self.score, rating)
 
+
+        current_note = self.display.current_note()
+        if current_note:
+            current_note = self.display.notes[current_note[0]]
+
+        self.display.arrow_feedback.on_update(time_passed, current_note, self.cur_pitch)
+
 PITCHES_IN_OCTAVE = 12
 MIDI_ADJ = 12
 NOTES_IN_OCTAVE = 7
 NOTE_TO_MIDI = {'C':0, 'D':2, 'E':4, 'F':5, 'G':7, 'A':9, 'B':11}
+MIDI_TO_NOTE = {0:'C', 2:'D', 4:'E', 5:'F', 7:'G', 9:'A', 11:'B'}
 ACC_TO_MIDI_ADJUST = {'#':1, '':0, 'b':-1}
 NOTE_TO_ID = {'C':0, 'D':1, 'E':2, 'F':3, 'G':4, 'A':5, 'B':6}
 def parse_pitch(str_pitch):
