@@ -1,4 +1,3 @@
-#####################################################################
 #
 # input_demo.py
 #
@@ -24,6 +23,7 @@ from common.wavegen import *
 from buffers import *
 
 from kivy.graphics.instructions import InstructionGroup
+from kivy.graphics.vertex_instructions import RoundedRectangle
 from kivy.graphics import Color, Ellipse, Rectangle, Line
 from kivy.graphics import PushMatrix, PopMatrix, Translate, Scale, Rotate
 #from kivy.core.image import Image
@@ -136,7 +136,8 @@ class IOBuffer(object):
 NOTE_SPEED = 200
 
 STAFF_LEFT_X = 100
-NOW_BAR_X = 250
+BIG_BLACK_BOX_X = 250
+NOW_BAR_X = 500
 PADDING = 100
 NOW_BAR_VERT_OVERHANG = 100
 NOTE_RECT_MARGIN = 2
@@ -209,7 +210,7 @@ class FeedbackArrow(InstructionGroup):
             if pitch_heard > 35:
                 self.set_visible()
                 self.set_rotation() # reset orientation to 0
-                
+
                 pitch_heard_closest = int(pitch_heard)
                 if pitch_heard_closest % 12 in MIDI_TO_NOTE:
                     sharp_needed = False
@@ -396,7 +397,7 @@ class NoteDisplay(InstructionGroup):
         self.color = Color(1,1,1)
         self.add(self.color)
 
-        self.rect = Rectangle(pos=self.pos, size=(duration_time*NOTE_SPEED, LANE_HEIGHT-2*NOTE_RECT_MARGIN))
+        self.rect = RoundedRectangle(radius=[NOTE_RADIUS]*4, pos=self.pos, size=(duration_time*NOTE_SPEED, LANE_HEIGHT-2*NOTE_RECT_MARGIN))
         self.add(self.rect)
 
         # ledger lines
@@ -500,9 +501,9 @@ class BeatMatchDisplay(InstructionGroup):
         # draw staff lines
         self.add(Color(1,1,1))
         for y in STAFF_Y_VALS:
-            self.add(Line(points=[NOW_BAR_X,y,Window.width,y], width=2))
+            self.add(Line(points=[BIG_BLACK_BOX_X,y,Window.width,y], width=2))
 
-        self.add(Line(points=[NOW_BAR_X,STAFF_Y_VALS[0],NOW_BAR_X,STAFF_Y_VALS[-1]], width=2))
+        # self.add(Line(points=[BIG_BLACK_BOX_X,STAFF_Y_VALS[0],BIG_BLACK_BOX_X,STAFF_Y_VALS[-1]], width=2))
         self.notes = []
         for parsed_pitch, start_time, duration in note_info:
             note = NoteDisplay(parsed_pitch, start_time, duration)
@@ -517,12 +518,12 @@ class BeatMatchDisplay(InstructionGroup):
 
         # this makes note content disappear once it passes the now bar
         self.add(Color(0,0,0))
-        self.add(Rectangle(pos=(0,0),size=(NOW_BAR_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
+        self.add(Rectangle(pos=(0,0),size=(BIG_BLACK_BOX_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
 
-        # draw part of staff left of now bar
+        # draw part of staff left of big black box
         self.add(Color(1,1,1))
         for y in STAFF_Y_VALS:
-            self.add(Line(points=[STAFF_LEFT_X,y,NOW_BAR_X,y], width=2))
+            self.add(Line(points=[STAFF_LEFT_X,y,BIG_BLACK_BOX_X,y], width=2))
         self.add(Line(
             points=[
                 STAFF_LEFT_X,
@@ -545,7 +546,7 @@ class BeatMatchDisplay(InstructionGroup):
         )
 
         # draw bass clef
-        self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(NOW_BAR_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
+        self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(BIG_BLACK_BOX_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
         self.add(self.bassClef)
 
         # add intonation adjustion arrows
