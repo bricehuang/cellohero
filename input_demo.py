@@ -36,7 +36,7 @@ import aubio
 import math
 import numpy as np
 
-NUM_CHANNELS = 2
+NUM_CHANNELS = 1
 
 class PitchDetector(object):
     def __init__(self):
@@ -162,78 +162,139 @@ class FeedbackArrow(InstructionGroup):
     def __init__(self,):
         super(FeedbackArrow, self).__init__()
 
-        self.number_last_pitches_to_consider = 3
+        # variables for sensitivity of the arrow
+        self.number_last_pitches_to_consider = 10 
         self.outlier_pitch_amt = 2
+        self.last_heard_pitches = []
 
+        # arrow
         self.horiz_position = NOW_BAR_X - 100
-        self.vert_position = Window.height/2
+        self.vert_position = Window.height/2 # can start in any position
         self.size = (100, 50)
+        self.arrow = CRectangle(texture = Image(source = 'images/white_arrow.png').texture, cpos=(self.horiz_position, self.vert_position), csize=self.size)
 
-        self.color = Color(1,1,1,0)
+        self.color = Color(1,0,0,0)
+        
 
-        self.arrow = CRectangle(texture = Image(source = 'arrow_right.png').texture, cpos=(self.horiz_position, self.vert_position), csize=self.size)
+        # accidental
+        accidental_size = (self.size[1], self.size[1])
+        self.accidental_horiz_position = self.horiz_position - .5 * self.size[1] - 100
+        self.accidental = CRectangle(cpos = (self.accidental_horiz_position, self.vert_position), csize = accidental_size)
 
+        self.accidental_color = Color(1,0,0,1)
+        
+        # rotations
         self.angle = 0
-
-        rotation_origin = (self.arrow.get_cpos()[0] + self.size[0] * .5, self.arrow.get_cpos()[1] + self.size[1] * .5, ) #furtherest right
-
+        rotation_origin = (self.arrow.get_cpos()[0] + self.size[0], self.arrow.get_cpos()[1] + self.size[1] * .5, ) #furtherest right
         self.rotation = Rotate(axis = (0,0,1), angle= self.angle, origin = rotation_origin)
         self.anti_rotation = Rotate(axis = (0,0,1), angle= - self.angle, origin = rotation_origin)
 
+        # adding to canvas
         self.add(self.rotation)
         self.add(self.color)
         self.add(self.arrow)
+        self.add(self.accidental_color)
+        self.add(self.accidental)
         self.add(self.anti_rotation)
-
-        self.last_heard_pitches = []
 
     def set_visible(self):
         self.color.a = 1
 
     def set_invisible(self):
         self.color.a = 0
+        self.accidental_color.a = 0
+
+    def set_accidental_visible(self, isSharp): # isSharp is boolean indicating either sharp or natural
+        self.accidental_color.a = 1
+        if isSharp:
+            self.accidental.texture = Image(source = 'images/white_sharp.png').texture
+        else: 
+            self.accidental.texture = Image(source = 'images/white_natural.png').texture
+
+    def set_red(self):
+        self.color.rgb = (1,0,0)
+        self.accidental_color.rgb = (1,0,0)
+
+    def set_green(self):
+        self.color.rgb = (0,1,0)
+        self.accidental_color.rgb = (0,1,0)
+
+    def set_white(self):
+        self.color.rgb = (1,1,1)
+        self.accidental_color.rgb = (1,1,1)
+
+    def set_accidental_invisible(self):
+        self.accidental_color.a = 0
 
     def set_vertical_position(self, y_pos):
         self.vert_position = y_pos
         self.arrow.cpos = (self.horiz_position, self.vert_position)
+        self.accidental.cpos = (self.accidental_horiz_position, self.vert_position)
 
     def set_rotation(self, angle = 0):
         self.arrow.angle = angle
         self.rotation.angle = self.arrow.angle
         self.anti_rotation.angle = -self.arrow.angle
 
-    def include_accidental(self, accidental): # accidental = "flat", "natural", "sharp", "none"
-        pass
 
     def on_update(self, dt, current_expected_note, pitch_heard):
+        # ignore outliers to provent sporadic movement
         if len(self.last_heard_pitches) < self.number_last_pitches_to_consider or abs(pitch_heard - np.mean(self.last_heard_pitches)) < self.outlier_pitch_amt:
-            if pitch_heard > 35:
+            
+            if pitch_heard > 35: # only display cello range notes
                 self.set_visible()
                 self.set_rotation() # reset orientation to 0
 
-                pitch_heard_closest = int(pitch_heard)
-                if pitch_heard_closest % 12 in MIDI_TO_NOTE:
-                    sharp_needed = False
-                    midi_note = MIDI_TO_NOTE[pitch_heard_closest % 12]
-                    octave = math.floor(pitch_heard_closest/12)
-                else:
-                    sharp_needed = True
-                    midi_note = MIDI_TO_NOTE[(pitch_heard_closest - 1) % 12]
-                    octave = math.floor((pitch_heard_closest - 1)/12)
-                position = NOTE_TO_ID[midi_note] + 1 + (octave - 1) * NOTES_IN_OCTAVE
-                place_here = note_to_lower_left(position)
-                self.set_vertical_position(place_here)
+                # get the position of the note
+                if current_expected_note and abs(current_expected_note.pitch - pitch_heard) < 1:  # these are cases which could round away to other positions
+                    # they are on the same line
+                    position = current_expected_note.noteid
+                    sharp_needed = current_expected_note.acc == '#'
+                else: 
+                    pitch_heard_closest = int(pitch_heard)
+                    # MIDI_TO_NOTE = {0:'C', 2:'D', 4:'E', 5:'F', 7:'G', 9:'A', 11:'B'}
+                    if pitch_heard_closest % 12 in MIDI_TO_NOTE:
+                        sharp_needed = False
+                        midi_note = MIDI_TO_NOTE[pitch_heard_closest % 12]
+                        octave = math.floor(pitch_heard_closest/12)
+                    else:
+                        sharp_needed = True
+                        midi_note = MIDI_TO_NOTE[(pitch_heard_closest - 1) % 12]
+                        octave = math.floor((pitch_heard_closest - 1)/12)
+                    position = NOTE_TO_ID[midi_note] + (octave - 1) * NOTES_IN_OCTAVE
 
+                place_here = note_to_lower_left(position)
+                self.set_vertical_position(place_here + LANE_SEP)
+
+                natural_needed = False
                 if current_expected_note:
-                    if abs(current_expected_note.pitch - pitch_heard) < 1:
+                    if abs(current_expected_note.pitch - pitch_heard) < 1: # within half step of correct note
                         angle = np.interp(current_expected_note.pitch - pitch_heard, (-1, 1), (-90,90))
                         self.set_rotation(angle)
-                    else:
-                        print("too far away")
+                        if abs(current_expected_note.pitch - pitch_heard) <= ACCEPTABLE_PITCH_INTERVAL:
+                            self.set_green()    
+                        else: 
+                            self.set_red()
+                    else: 
+                        # heard pitch and expected pitch displayed on same line
+                        # will already show the sharp, but need to show natural in this case
+                        self.set_red()
+                        if position == current_expected_note.noteid and not sharp_needed:
+                            natural_needed = True
                 else:
-                    print("no expected note")
+                    self.set_white()ff
+
+                # turn on/off sharp sign if necessary (important, must happen after color changes):
+                if(sharp_needed):
+                    self.set_accidental_visible(True)
+                elif(natural_needed):
+                    self.set_accidental_visible(False)
+                else:
+                    self.set_accidental_invisible()    
+
             else:
                 self.set_invisible()
+                self.set_accidental_invisible()
 
         self.last_heard_pitches.append(pitch_heard)
         self.last_heard_pitches = self.last_heard_pitches[-self.number_last_pitches_to_consider:]
