@@ -300,7 +300,7 @@ class FeedbackArrow(InstructionGroup):
         self.last_heard_pitches = self.last_heard_pitches[-self.number_last_pitches_to_consider:]
 
 
-LEDGER_LINE_WIDTH = 50
+LEDGER_LINE_WIDTH = 55
 class LedgerLine(InstructionGroup):
     def __init__(self, note, left_px):
         super(LedgerLine, self).__init__()
@@ -308,7 +308,7 @@ class LedgerLine(InstructionGroup):
         self.color = Color(.8,.8,.2)
         self.add(self.color)
         self.pos = np.array((left_px, note_to_lower_left(note) + LANE_SEP))
-        self.line = Line(points=[self.pos[0],self.pos[1],self.pos[0]+LEDGER_LINE_WIDTH,self.pos[1]],width=2)
+        self.line = Line(points=[self.pos[0],self.pos[1],self.pos[0]+LEDGER_LINE_WIDTH,self.pos[1]],width=4)
         self.add(self.line)
 
     def on_update(self,dt):
@@ -326,107 +326,81 @@ class LedgerLine(InstructionGroup):
 
 STEM_LENGTH=75
 class NoteFigure(InstructionGroup):
+
+    @staticmethod
+    def get_image(dur, note):
+        suffix = '' if dur == 4 else ('-d' if note>22 else '-u')
+        img = Image(source = 'notes/' + str(dur) + suffix + '.png')
+        print(img.source)
+        return img.texture
+
+    @staticmethod
+    def note_offset(dur, note):
+        down = (note > 22)
+        if dur == 4:
+            return np.array((-2,-4))
+        elif dur == 3 and down:
+            return np.array((0,-90))
+        elif dur == 3 and not down:
+            return np.array((0,3))
+        elif dur == 2 and down:
+            return np.array((0,-90))
+        elif dur == 2 and not down:
+            return np.array((0,3))
+        elif dur == 1.5 and down:
+            return np.array((0,-95))
+        elif dur == 1.5 and not down:
+            return np.array((-5,2))
+        elif dur == 1 and down:
+            return np.array((-22,-100))
+        elif dur == 1 and not down:
+            return np.array((-18,-12))
+        elif dur == 0.5 and down:
+            return np.array((0,-90))
+        elif dur == 0.5 and not down:
+            return np.array((0,0))
+        return np.array((0,0))
+
+    @staticmethod
+    def note_size(dur, note):
+        if dur == 4:
+            return np.array((55,55))
+        elif dur == 3:
+            return np.array((70,135))
+        elif dur == 2:
+            return np.array((50,135))
+        elif dur == 1.5:
+            return np.array((65,140))
+        elif dur == 1:
+            return np.array((90,160))
+        elif dur == 0.5 and note>22:
+            return np.array((40,130))
+        elif dur == 0.5 and note <= 22:
+            return np.array((63,130))
+        return ((0,0))
+
     def __init__(self, note, left_px, duration_beats):
         super(NoteFigure, self).__init__()
-        beats = round(duration_beats, 1)
+        self.dur = round(duration_beats, 1)
         self.note = note
         self.add(Color(.8,.8,.2))
         self.pos = np.array((left_px + 3, note_to_lower_left(note) + 3))
-        self.head = Ellipse(pos=self.pos, size=(2*NOTE_RADIUS,2*NOTE_RADIUS), segments=40)
-        self.add(self.head)
 
-        self.stem = None
-        if duration_beats in {0.5,1.,1.5,2.,3.}:
-            if self.note >= 22:
-                self.stem = Line(points=[
-                    self.pos[0],
-                    self.pos[1] + NOTE_RADIUS,
-                    self.pos[0],
-                    self.pos[1] + NOTE_RADIUS - STEM_LENGTH
-                ], width=2)
-            else:
-                self.stem = Line(points=[
-                    self.pos[0] + 2*NOTE_RADIUS,
-                    self.pos[1] + NOTE_RADIUS,
-                    self.pos[0] + 2*NOTE_RADIUS,
-                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH
-                ], width=2)
-            self.add(self.stem)
+        # if duration_beats == 4:
+        texture = NoteFigure.get_image(self.dur, self.note)
+        pos = self.pos + NoteFigure.note_offset(self.dur, self.note)
+        size = NoteFigure.note_size(self.dur, self.note)
 
-        self.flag = None
-        if duration_beats in {0.5}:
-            if self.note >= 22:
-                self.flag = Line(points=[
-                    self.pos[0],
-                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH,
-                    self.pos[0] - 25,
-                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH + 50,
-                ], width=2)
-            else:
-                self.flag = Line(points=[
-                    self.pos[0] + 2*NOTE_RADIUS,
-                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH,
-                    self.pos[0] + 2*NOTE_RADIUS + 25,
-                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH - 50
-                ], width=2)
-            self.add(self.flag)
-
-        self.dot = None
-        if duration_beats in {1.5,3.}:
-            if self.note >= 22:
-                self.dot = Ellipse(pos = self.pos+np.array((45,0)), size=(12,12), segments=40)
-            else:
-                self.dot = Ellipse(pos = self.pos+np.array((-7,36)), size=(12,12), segments=40)
-            self.add(self.dot)
-
-
-        self.add(Color(1,1,1))
-        self.headcenter = None
-        if duration_beats in {2.,3.,4.}:
-            self.headcenter = Ellipse(pos=self.pos+np.array((8,8)), size=(2*(NOTE_RADIUS-8),2*(NOTE_RADIUS-8)), segments=40)
-            self.add(self.headcenter)
-
+        self.body = Rectangle(
+            texture = texture,
+            pos = pos,
+            size = size
+        )
+        self.add(self.body)
 
     def on_update(self, dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
-        self.head.pos = self.pos
-        if self.headcenter is not None:
-            self.headcenter.pos = self.pos+np.array((8,8))
-        if self.stem is not None:
-            if self.note >= 22:
-                self.stem.points = [
-                    self.pos[0],
-                    self.pos[1] + NOTE_RADIUS,
-                    self.pos[0],
-                    self.pos[1] + NOTE_RADIUS-STEM_LENGTH
-                ]
-            else:
-                self.stem.points =[
-                    self.pos[0] + 2*NOTE_RADIUS,
-                    self.pos[1] + NOTE_RADIUS,
-                    self.pos[0] + 2*NOTE_RADIUS,
-                    self.pos[1] + NOTE_RADIUS+STEM_LENGTH
-                ]
-        if self.flag is not None:
-            if self.note >= 22:
-                self.flag.points=[
-                    self.pos[0],
-                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH,
-                    self.pos[0] - 25,
-                    self.pos[1]+NOTE_RADIUS-STEM_LENGTH + 50,
-                ]
-            else:
-                self.flag.points = [
-                    self.pos[0] + 2*NOTE_RADIUS,
-                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH,
-                    self.pos[0] + 2*NOTE_RADIUS + 25,
-                    self.pos[1] + NOTE_RADIUS + STEM_LENGTH - 50
-                ]
-        if self.dot is not None:
-            if self.note >= 22:
-                self.dot.pos = self.pos+np.array((45,0))
-            else:
-                self.dot.pos = self.pos+np.array((-7,36))
+        self.body.pos = self.pos + NoteFigure.note_offset(self.dur, self.note)
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
@@ -543,7 +517,7 @@ class BarLine(InstructionGroup):
                 self.x,
                 STAFF_Y_VALS[-1]
             ],
-            width=1
+            width=3
         )
         self.add(self.line)
 
