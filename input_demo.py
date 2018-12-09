@@ -163,7 +163,7 @@ class FeedbackArrow(InstructionGroup):
         super(FeedbackArrow, self).__init__()
 
         # variables for sensitivity of the arrow
-        self.number_last_pitches_to_consider = 10 
+        self.number_last_pitches_to_consider = 10
         self.outlier_pitch_amt = 2
         self.last_heard_pitches = []
 
@@ -174,7 +174,7 @@ class FeedbackArrow(InstructionGroup):
         self.arrow = CRectangle(texture = Image(source = 'images/white_arrow.png').texture, cpos=(self.horiz_position, self.vert_position), csize=self.size)
 
         self.color = Color(1,0,0,0)
-        
+
 
         # accidental
         accidental_size = (self.size[1], self.size[1])
@@ -182,7 +182,7 @@ class FeedbackArrow(InstructionGroup):
         self.accidental = CRectangle(cpos = (self.accidental_horiz_position, self.vert_position), csize = accidental_size)
 
         self.accidental_color = Color(1,0,0,1)
-        
+
         # rotations
         self.angle = 0
         rotation_origin = (self.arrow.get_cpos()[0] + self.size[0], self.arrow.get_cpos()[1] + self.size[1] * .5, ) #furtherest right
@@ -208,7 +208,7 @@ class FeedbackArrow(InstructionGroup):
         self.accidental_color.a = 1
         if isSharp:
             self.accidental.texture = Image(source = 'images/white_sharp.png').texture
-        else: 
+        else:
             self.accidental.texture = Image(source = 'images/white_natural.png').texture
 
     def set_red(self):
@@ -240,7 +240,7 @@ class FeedbackArrow(InstructionGroup):
     def on_update(self, dt, current_expected_note, pitch_heard):
         # ignore outliers to provent sporadic movement
         if len(self.last_heard_pitches) < self.number_last_pitches_to_consider or abs(pitch_heard - np.mean(self.last_heard_pitches)) < self.outlier_pitch_amt:
-            
+
             if pitch_heard > 35: # only display cello range notes
                 self.set_visible()
                 self.set_rotation() # reset orientation to 0
@@ -250,7 +250,7 @@ class FeedbackArrow(InstructionGroup):
                     # they are on the same line
                     position = current_expected_note.noteid
                     sharp_needed = current_expected_note.acc == '#'
-                else: 
+                else:
                     pitch_heard_closest = int(pitch_heard)
                     # MIDI_TO_NOTE = {0:'C', 2:'D', 4:'E', 5:'F', 7:'G', 9:'A', 11:'B'}
                     if pitch_heard_closest % 12 in MIDI_TO_NOTE:
@@ -272,17 +272,17 @@ class FeedbackArrow(InstructionGroup):
                         angle = np.interp(current_expected_note.pitch - pitch_heard, (-1, 1), (-90,90))
                         self.set_rotation(angle)
                         if abs(current_expected_note.pitch - pitch_heard) <= ACCEPTABLE_PITCH_INTERVAL:
-                            self.set_green()    
-                        else: 
+                            self.set_green()
+                        else:
                             self.set_red()
-                    else: 
+                    else:
                         # heard pitch and expected pitch displayed on same line
                         # will already show the sharp, but need to show natural in this case
                         self.set_red()
                         if position == current_expected_note.noteid and not sharp_needed:
                             natural_needed = True
                 else:
-                    self.set_white()ff
+                    self.set_white()
 
                 # turn on/off sharp sign if necessary (important, must happen after color changes):
                 if(sharp_needed):
@@ -290,7 +290,7 @@ class FeedbackArrow(InstructionGroup):
                 elif(natural_needed):
                     self.set_accidental_visible(False)
                 else:
-                    self.set_accidental_invisible()    
+                    self.set_accidental_invisible()
 
             else:
                 self.set_invisible()
