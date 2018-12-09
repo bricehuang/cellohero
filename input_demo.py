@@ -377,9 +377,9 @@ class NoteFigure(InstructionGroup):
             return np.array((40,130))
         elif dur == 0.5 and note <= 22:
             return np.array((63,130))
-        return ((0,0))
+        return np.array((0,0))
 
-    def __init__(self, note, left_px, duration_beats):
+    def __init__(self, note, left_px, duration_beats, acc):
         super(NoteFigure, self).__init__()
         self.dur = round(duration_beats, 1)
         self.note = note
@@ -398,9 +398,27 @@ class NoteFigure(InstructionGroup):
         )
         self.add(self.body)
 
+        self.acc = None
+        if acc == '#':
+            self.acc = Rectangle(
+                texture=Image(source='images/white_sharp.png').texture,
+                pos = self.pos + np.array((-40,5)),
+                size = np.array((40,40))
+            )
+        elif acc == 'b':
+            self.acc = Rectangle(
+                texture=Image(source='images/white_flat.png').texture,
+                pos = self.pos + np.array((-40,5)),
+                size = np.array((40,40))
+            )
+        if self.acc:
+            self.add(self.acc)
+
     def on_update(self, dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.body.pos = self.pos + NoteFigure.note_offset(self.dur, self.note)
+        if self.acc:
+            self.acc.pos = self.pos + np.array((-40,5))
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
@@ -441,7 +459,7 @@ class NoteDisplay(InstructionGroup):
             self.add(ll)
 
         # note head
-        self.figure = NoteFigure(self.noteid, self.pos[0], self.duration_beats)
+        self.figure = NoteFigure(self.noteid, self.pos[0], self.duration_beats, self.acc)
         self.add(self.figure)
         # self.add(Line(points=[700,750,800,750],width=2))
 
