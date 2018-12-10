@@ -657,18 +657,21 @@ class BeatMatchDisplay(InstructionGroup):
 GOOD_CUTOFF = 0.6
 EXCELLENT_CUTOFF = 0.9
 class Cellist(object):
-    def __init__(self, display, score_cb, end_game_cb):
+    def __init__(self, display, score_cb, end_game_cb, update_bear_cb):
         super(Cellist, self).__init__()
         self.display = display
         self.cur_pitch = 0
         self.score = 0
         self.score_cb = score_cb
         self.end_game_cb = end_game_cb
+        self.update_bear_cb = update_bear_cb
 
     def notify_pitch(self, pitch):
         self.cur_pitch = pitch
 
     def on_update(self):
+        NUM_HISTORIC_NOTES_TO_CONSIDER = 5
+
         time_passed = kivyClock.frametime
         current_note = self.display.current_note()
         if current_note is not None:
@@ -696,9 +699,29 @@ class Cellist(object):
 
         current_note = self.display.current_note()
         if current_note:
+            current_note_index = current_note[0]
             current_note = self.display.notes[current_note[0]]
 
+            #  update the bear image
+            if current_note_index >= NUM_HISTORIC_NOTES_TO_CONSIDER - 1:
+                start = current_note_index - NUM_HISTORIC_NOTES_TO_CONSIDER + 1
+                end = current_note_index + 1
+                past_notes = self.display.notes[start:end]
+                hits = 0
+                for historic_note in past_notes:
+                    if historic_note.status == NoteDisplay.HIT:
+                        hits += 1
+                percent_hits = hits/len(past_notes)
+                if percent_hits < .6:
+                    self.update_bear_cb("lost_bear")
+                elif percent_hits >= .6 and percent_hits < .8:
+                    self.update_bear_cb("spinning_bear")
+                else:
+                    self.update_bear_cb("heart_bear")
+
         self.display.arrow_feedback.on_update(time_passed, current_note, self.cur_pitch)
+
+
 
 PITCHES_IN_OCTAVE = 12
 MIDI_ADJ = 12
@@ -828,11 +851,11 @@ class MainWidget1(BaseWidget):
         self.clear_end_screen_buttons()
 
         self.bear.pos = (Window.width/2 - self.BEAR_SIZE/2, 0)
-        self.bear.source = "images/good_job_bear.gif"
+        self.bear.source = "images/spinning_bear.gif"
 
         self.song_data = SongData('music/'+filename+'.txt')
         self.display = BeatMatchDisplay(self.song_data)
-        self.cellist = Cellist(self.display, self.update_score, self.end_song)
+        self.cellist = Cellist(self.display, self.update_score, self.end_song, self.set_bear)
         self.objects.add(self.display)
 
     def clear_end_screen_buttons(self):
@@ -970,6 +993,11 @@ class MainWidget1(BaseWidget):
         if gf:
             new_gain = self.mixer.get_gain() * gf
             self.mixer.set_gain( new_gain )
+
+    def set_bear(self, image_identifier):
+        if not image_identifier in self.bear.source:
+            self.bear.source = 'images/' +  image_identifier + '.gif'
+
 
     def _process_input(self) :
         data = combine_buffers(self.input_buffers)
