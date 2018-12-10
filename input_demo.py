@@ -22,13 +22,6 @@ from common.gfxutil import *
 from common.wavegen import *
 from buffers import *
 
-
-# TODO
-
-# from common.synth import *
-# from common.metro import *
-# from common.clock import *
-
 from kivy.graphics.instructions import InstructionGroup
 from kivy.graphics.vertex_instructions import RoundedRectangle
 from kivy.graphics import Color, Ellipse, Rectangle, Line
@@ -795,25 +788,11 @@ class MainWidget1(BaseWidget):
         self.pitch = PitchDetector()
         self.cur_pitch = 0
 
-
-        #TODO       
-        # metronome
-        # self.synth = Synth('data/FluidR3_GM.sf2')
-        # self.tempo_map  = SimpleTempoMap(120)
-        # self.sched = AudioScheduler(self.tempo_map)
-        # self.mixer.add(self.sched)
-        # self.sched.set_generator(self.synth)
-
-        # # create the metronome:
-        # self.metro = Metronome(self.sched, self.synth)
-        # self.metro.toggle()
-
-    
-
         self.recording = False
         self.channel_select = 0
         self.input_buffers = []
         self.live_wave = None
+        self.playback_wav = None
 
         self.state = START_MENU
         self.info = topleft_label()
@@ -879,6 +858,12 @@ class MainWidget1(BaseWidget):
         self.cellist = Cellist(self.display, self.update_score, self.end_song, self.set_bear)
         self.objects.add(self.display)
 
+        # stop playing playback
+        self.stop_sound_playback()
+
+        # start recording
+        self.recording = True
+
     def clear_end_screen_buttons(self):
         if self.reset_button:
             self.remove_widget(self.reset_button)
@@ -923,6 +908,13 @@ class MainWidget1(BaseWidget):
         self.replay_button.bind(state=self.select_song_callback)
         self.add_widget(self.replay_button)
 
+        # playback of performance
+        self._process_input()
+        self.recording = False
+        if self.live_wave:
+            self.playback_wav = WaveGenerator(self.live_wave)
+            self.mixer.add(self.playback_wav)
+
     def reset_callback(self, instance, value):
         if value == 'down':
             self.reset()
@@ -950,18 +942,27 @@ class MainWidget1(BaseWidget):
         self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
         self.create_button('Rigadoon', 'rigadoon', (1000,0))
 
+        self.stop_sound_playback()
+
     def update_score(self, score):
         self.score = score
 
-    def on_update(self) :
+    def stop_sound_playback(self):
+        # stop sound playback (if happening)
+        if self.playback_wav:
+            self.mixer.remove(self.playback_wav)
+            self.playback_wav = None
+            self.live_wave = None
+
+    def on_update(self):
         if self.state == IN_GAME:
-            self.audio.on_update()
             self.cellist.on_update()
             self.objects.on_update()
 
             if self.info:
                 self.info.text = "pitch: %.1f\n" % self.cur_pitch
                 self.info.text += "score: %d\n" % self.score
+        self.audio.on_update()
 
     def receive_audio(self, frames, num_channels) :
         # handle 1 or 2 channel input.
@@ -980,34 +981,16 @@ class MainWidget1(BaseWidget):
 
         # pitch detection: get pitch and display on meter and graph
         self.cur_pitch = self.pitch.write(mono)
-        self.cellist.notify_pitch(self.cur_pitch)
+        if self.cellist:
+            self.cellist.notify_pitch(self.cur_pitch)
 
         # record to internal buffer for later playback as a WaveGenerator
         if self.recording:
             self.input_buffers.append(frames)
 
     def on_key_down(self, keycode, modifiers):
-        # toggle recording
-        if keycode[1] == 'r':
-            if self.recording:
-                self._process_input()
-            self.recording = not self.recording
-
-        # play back live buffer
-        if keycode[1] == 'p':
-            if self.live_wave:
-                self.mixer.add(WaveGenerator(self.live_wave))
-
         if keycode[1] == 'c' and NUM_CHANNELS == 2:
             self.channel_select = 1 - self.channel_select
-
-        # changing bear image
-        if keycode[1] == '1':
-            self.bear.source = 'images/cello_smash.gif'
-        if keycode[1] == '2':
-            self.bear.source = 'images/clapping_bear.gif'
-        if keycode[1] == '3':
-            self.bear.source = 'images/good_job_bear.gif'
 
         # adjust mixer gain
         gf = lookup(keycode[1], ('up', 'down'), (1.1, 1/1.1))
