@@ -551,10 +551,20 @@ class BeatMatchDisplay(InstructionGroup):
         note_info = song_data.notes
         bar_info = song_data.barlines
 
+
         # draw staff lines
         self.add(Color(1,1,1))
         for y in STAFF_Y_VALS:
-            self.add(Line(points=[BIG_BLACK_BOX_X,y,Window.width,y], width=2))
+            self.add(Line(points=[STAFF_LEFT_X,y,Window.width,y], width=2))
+        self.add(Line(
+            points=[
+                STAFF_LEFT_X,
+                STAFF_Y_VALS[0],
+                STAFF_LEFT_X,
+                STAFF_Y_VALS[-1],
+            ],
+            width=2)
+        )
 
         # self.add(Line(points=[BIG_BLACK_BOX_X,STAFF_Y_VALS[0],BIG_BLACK_BOX_X,STAFF_Y_VALS[-1]], width=2))
         self.notes = []
@@ -573,21 +583,8 @@ class BeatMatchDisplay(InstructionGroup):
         self.add(Color(0,0,0))
         self.add(Rectangle(pos=(0,0),size=(BIG_BLACK_BOX_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
 
-        # draw part of staff left of big black box
-        self.add(Color(1,1,1))
-        for y in STAFF_Y_VALS:
-            self.add(Line(points=[STAFF_LEFT_X,y,BIG_BLACK_BOX_X,y], width=2))
-        self.add(Line(
-            points=[
-                STAFF_LEFT_X,
-                STAFF_Y_VALS[0],
-                STAFF_LEFT_X,
-                STAFF_Y_VALS[-1],
-            ],
-            width=2)
-        )
-
         # draw now bar
+        self.add(Color(1,1,1))
         self.add(Line(
             points=[
                 NOW_BAR_X,
@@ -759,10 +756,12 @@ class SongData(object):
         while body_line:
             line = body_line.rstrip()
             str_pitch, start, duration = line.split()
+            start_parsed = float(start) + beats_per_measure
+            duration_parsed = float(duration)
             self.notes.append((
                 parse_pitch(str_pitch),
-                (float(start)/bps, float(start)),
-                (float(duration)/bps, float(duration))
+                (start_parsed/bps, start_parsed),
+                (duration_parsed/bps, duration_parsed)
             ))
             body_line = f.readline()
         f.close()
