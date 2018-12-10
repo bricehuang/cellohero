@@ -22,6 +22,13 @@ from common.gfxutil import *
 from common.wavegen import *
 from buffers import *
 
+
+# TODO
+
+# from common.synth import *
+# from common.metro import *
+# from common.clock import *
+
 from kivy.graphics.instructions import InstructionGroup
 from kivy.graphics.vertex_instructions import RoundedRectangle
 from kivy.graphics import Color, Ellipse, Rectangle, Line
@@ -787,6 +794,21 @@ class MainWidget1(BaseWidget):
         self.mixer.add(self.io_buffer)
         self.pitch = PitchDetector()
         self.cur_pitch = 0
+
+
+        #TODO       
+        # metronome
+        # self.synth = Synth('data/FluidR3_GM.sf2')
+        # self.tempo_map  = SimpleTempoMap(120)
+        # self.sched = AudioScheduler(self.tempo_map)
+        # self.mixer.add(self.sched)
+        # self.sched.set_generator(self.synth)
+
+        # # create the metronome:
+        # self.metro = Metronome(self.sched, self.synth)
+        # self.metro.toggle()
+
+    
 
         self.recording = False
         self.channel_select = 0
