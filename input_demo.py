@@ -960,8 +960,8 @@ class MainWidget1(BaseWidget):
             self.objects.on_update()
 
             if self.info:
-                self.info.text = "pitch: %.1f\n" % self.cur_pitch
-                self.info.text += "score: %d\n" % self.score
+                # self.info.text = "pitch: %.1f\n" % self.cur_pitch
+                self.info.text = "score: %d\n" % self.score
         self.audio.on_update()
 
     def receive_audio(self, frames, num_channels) :
