@@ -941,6 +941,8 @@ class MainWidget1(BaseWidget):
         self.create_button('C Major Scale', 'cmaj', (0,0))
         self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
         self.create_button('Rigadoon', 'rigadoon', (1000,0))
+        self.create_button('Open Strings', 'open_strings', (0, 400))
+        self.create_button('Bach Prelude', 'bach', (1000,400))
 
         self.stop_sound_playback()
 
