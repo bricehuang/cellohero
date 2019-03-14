@@ -782,7 +782,6 @@ START_MENU = "start"
 IN_GAME = "game"
 END_GAME = "end"
 class MainWidget1(BaseWidget):
-    BEAR_SIZE = 500 * RESIZE_MULTIPLIER
     def __init__(self):
         super(MainWidget1, self).__init__()
 
@@ -813,30 +812,87 @@ class MainWidget1(BaseWidget):
         self.display = None
         self.cellist = None
 
+        self.bear_size = 500
+        self.padding = Window.height/20
+
+        
         # CELLO HERO
         self.logo = Image(
             source = "images/cellohero.png",
-            size = (Window.width/2 * RESIZE_MULTIPLIER, Window.height/4 * RESIZE_MULTIPLIER),
-            pos = (Window.width/4 * RESIZE_MULTIPLIER, Window.height*2/3 * RESIZE_MULTIPLIER)
+            size = (Window.width/2, Window.height/4),
+            pos = (Window.width/4, Window.height*2/3)
         )
         self.add_widget(self.logo)
 
         # BEAR ANIMATION!
         self.bear = Image(
             source = "images/going_to_practice_bear.gif",
-            size = (self.BEAR_SIZE, self.BEAR_SIZE),
-            pos = (Window.width/2 * RESIZE_MULTIPLIER - self.BEAR_SIZE/2, Window.height/4 * RESIZE_MULTIPLIER)
+            size = (self.bear_size, self.bear_size),
+            pos = (Window.width/2 - self.bear_size/2, Window.height/4),
+            allow_stretch = True
         )
         self.add_widget(self.bear)
 
         self.reset_button = None
         self.replay_button = None
+        self.buttons = []
         self.song_name = None
         self.score_label = None
+
+        self.resize_elements()
         self.reset()
 
+
+        Window.bind(on_resize=self.resize_elements)
+
+    def resize_elements(self, instance = None, x = 0, y= 0):
+        padding = Window.height/20
+        self.padding = padding
+
+        # resize logo
+        if (self.logo):
+            self.logo.size = ((Window.width - 4 * padding)/2, Window.height/4)
+            self.logo.pos = ((Window.width - self.logo.size[0])/2, 3*Window.height/4)
+
+
+        # bear icon
+        if (self.bear):
+            self.position_bear(len(self.buttons) > 0) # hack to know on main screen
+
+            
+        # buttons
+        
+        navigation_button_size = (Window.width/4, Window.height/3)
+        naviation_button_font_size = Window.height/20
+        if (self.reset_button):
+            self.reset_button.size = navigation_button_size
+            self.reset_button.pos = (padding, padding)
+            self.reset_button.font_size = naviation_button_font_size
+        if (self.replay_button):
+            self.replay_button.size = navigation_button_size
+            self.replay_button.pos = (Window.width - navigation_button_size[0] - padding, padding)
+            self.replay_button.font_size = naviation_button_font_size
+        
+        button_num = 0
+        for button in self.buttons:
+            button.size = (Window.width/4, (Window.height - 2 * padding)/len(self.buttons))
+            button.pos = (padding, padding + button_num * button.size[1])
+            button.font_size = Window.height/30
+            button_num += 1
+
+    def position_bear(self, is_main_menu):
+        if (is_main_menu):
+            self.bear_size = 3*Window.height/4
+            self.bear.size = (self.bear_size, self.bear_size)
+            self.bear.pos = (2 * self.padding + Window.width/4, self.padding)
+        else:
+            self.bear_size = Window.height/3.5
+            self.bear.size = (self.bear_size, self.bear_size)
+            self.bear.pos = (Window.width/2 - self.bear_size/2, self.padding)
+
+
     def create_button(self, text, id, pos):
-        button = Button(text=text, id=id, pos=pos, size=(500 * RESIZE_MULTIPLIER,300 * RESIZE_MULTIPLIER), font_size=40 * RESIZE_MULTIPLIER)
+        button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40)
         button.bind(state= self.select_song_callback)
         self.add_widget(button)
         self.buttons.append(button)
@@ -856,7 +912,7 @@ class MainWidget1(BaseWidget):
         self.buttons = []
         self.clear_end_screen_buttons()
 
-        self.bear.pos = (Window.width/2 - self.BEAR_SIZE/2, 0)
+        self.position_bear(False)
         self.bear.source = "images/spinning_bear.gif"
 
         self.song_data = SongData('music/'+filename+'.txt')
@@ -914,6 +970,8 @@ class MainWidget1(BaseWidget):
         self.replay_button.bind(state=self.select_song_callback)
         self.add_widget(self.replay_button)
 
+        self.resize_elements()
+
         # playback of performance
         self._process_input()
         self.recording = False
@@ -929,7 +987,7 @@ class MainWidget1(BaseWidget):
     def reset(self):
         # reset bear
         self.bear.source = "images/going_to_practice_bear.gif"
-        self.bear.pos = (Window.width/2 - self.BEAR_SIZE/2, Window.height/4)
+        self.position_bear(True)
 
         # reset whatever state
         self.song_name = None
@@ -944,11 +1002,14 @@ class MainWidget1(BaseWidget):
             self.add_widget(self.info)
 
         self.buttons = []
+        
         self.create_button('C Major Scale', 'cmaj', (0,0))
-        self.create_button('Mary Had a Little Lamb', 'mary', (500 * RESIZE_MULTIPLIER,0))
-        self.create_button('Rigadoon', 'rigadoon', (1000 * RESIZE_MULTIPLIER,0))
-        self.create_button('Open Strings', 'open_strings', (0, 400 * RESIZE_MULTIPLIER))
-        self.create_button('Bach Prelude', 'bach', (1000 * RESIZE_MULTIPLIER, 400 * RESIZE_MULTIPLIER))
+        self.create_button('Mary Had a Little Lamb', 'mary', (0,0))
+        self.create_button('Rigadoon', 'rigadoon', (0,0))
+        self.create_button('Open Strings', 'open_strings', (0, 400))
+        self.create_button('Bach Prelude', 'bach', (0, 400))
+
+        self.resize_elements()
 
         self.stop_sound_playback()
 
