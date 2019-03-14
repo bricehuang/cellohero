@@ -309,19 +309,30 @@ class FeedbackArrow(InstructionGroup):
 
 
 LEDGER_LINE_WIDTH = 55 * RESIZE_MULTIPLIER
+LEDGER_LINE_XOFFSET = -10
 class LedgerLine(InstructionGroup):
     def __init__(self, note, left_px):
         super(LedgerLine, self).__init__()
         assert (note%2 == 0 and (note >= MIDDLE_C_ID or note <= E2_ID))
-        self.color = Color(.8,.8,.2)
+        self.color = Color(0,0,0)
         self.add(self.color)
         self.pos = np.array((left_px, note_to_lower_left(note) + LANE_SEP))
-        self.line = Line(points=[self.pos[0],self.pos[1],self.pos[0]+LEDGER_LINE_WIDTH,self.pos[1]],width=4)
+        self.line = Line(points=[
+            self.pos[0]+LEDGER_LINE_XOFFSET,
+            self.pos[1],
+            self.pos[0]+LEDGER_LINE_WIDTH+LEDGER_LINE_XOFFSET,
+            self.pos[1]
+        ],width=4)
         self.add(self.line)
 
     def on_update(self,dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
-        self.line.points = [self.pos[0],self.pos[1],self.pos[0]+LEDGER_LINE_WIDTH,self.pos[1]]
+        self.line.points = [
+            self.pos[0]+LEDGER_LINE_XOFFSET,
+            self.pos[1],
+            self.pos[0]+LEDGER_LINE_WIDTH+LEDGER_LINE_XOFFSET,
+            self.pos[1]
+        ]
 
     @staticmethod
     def get_ledger_lines(note, left_px):
@@ -348,23 +359,25 @@ class NoteFigure(InstructionGroup):
         if dur == 4:
             return np.array((-2,-4))
         elif dur == 3 and down:
-            return np.array((0,-90))
+            return np.array((0,-145))
         elif dur == 3 and not down:
             return np.array((0,3))
         elif dur == 2 and down:
             return np.array((0,-140))
         elif dur == 2 and not down:
+            return np.array((0,8))
+        elif dur == 1.5 and down:
             return np.array((0,-155))
         elif dur == 1.5 and not down:
-            return np.array((-5,2))
+            return np.array((-5,8))
         elif dur == 1 and down:
             return np.array((-22,-155))
         elif dur == 1 and not down:
             return np.array((-18,-12))
         elif dur == 0.5 and down:
-            return np.array((0,-90))
+            return np.array((0,-138))
         elif dur == 0.5 and not down:
-            return np.array((0,0))
+            return np.array((0,8))
         return np.array((0,0))
 
     @staticmethod
@@ -389,7 +402,7 @@ class NoteFigure(InstructionGroup):
         super(NoteFigure, self).__init__()
         self.dur = round(duration_beats, 1)
         self.note = note
-        self.add(Color(.8,.8,.2))
+        self.add(Color(0,0,0))
         self.pos = np.array((left_px, note_to_lower_left(note)))
 
         # if duration_beats == 4:
@@ -453,7 +466,7 @@ class NoteDisplay(InstructionGroup):
 
         self.pos = np.array([horiz_position, vert_position+NOTE_RECT_MARGIN])
 
-        self.color = Color(1,1,1)
+        self.color = Color(.763,.706,.371)
         self.add(self.color)
 
         self.rect = RoundedRectangle(radius=[NOTE_RADIUS]*4, pos=self.pos, size=(duration_time*NOTE_SPEED, LANE_HEIGHT-2*NOTE_RECT_MARGIN))
@@ -530,7 +543,7 @@ class NoteDisplay(InstructionGroup):
 class BarLine(InstructionGroup):
     def __init__(self, time):
         super(BarLine, self).__init__()
-        self.color = Color(1,1,1)
+        self.color = Color(0,0,0)
         self.add(self.color)
 
         self.x = NOW_BAR_X + time*NOTE_SPEED
@@ -559,9 +572,9 @@ class BeatMatchDisplay(InstructionGroup):
 
 
         # draw staff lines
-        self.add(Color(1,1,1))
+        self.add(Color(0,0,0))
         for y in STAFF_Y_VALS:
-            self.add(Line(points=[STAFF_LEFT_X,y,Window.width,y], width=2))
+            self.add(Line(points=[STAFF_LEFT_X,y,Window.width*2,y], width=2))
         self.add(Line(
             points=[
                 STAFF_LEFT_X,
@@ -585,12 +598,13 @@ class BeatMatchDisplay(InstructionGroup):
             self.add(bar)
             self.bars.append(bar)
 
+        # TODO get the fade
         # this makes note content disappear once it passes the now bar
-        self.add(Color(0,0,0))
-        self.add(Rectangle(pos=(0,0),size=(BIG_BLACK_BOX_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
+        # self.add(Color(0,0,0))
+        # self.add(Rectangle(pos=(0,0),size=(BIG_BLACK_BOX_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
 
         # draw now bar
-        self.add(Color(1,1,1))
+        self.add(Color(0,0,0))
         self.add(Line(
             points=[
                 NOW_BAR_X,
@@ -809,14 +823,19 @@ class MainWidget1(BaseWidget):
         self.info = Label(text= "", pos = (self.padding, Window.height - self.padding), font_size = 40, font_name = self.FONT_NAME)
         self.add_widget(self.info)
 
-        self.objects = AnimGroup()
-        self.canvas.add(self.objects)
-
         self.score = 0
         self.song_data = None
         self.display = None
         self.cellist = None
-        
+
+        # Background
+        self.background = Image(
+            source = "images/parchment.png",
+            size = (Window.width * RESIZE_MULTIPLIER*2, Window.height * RESIZE_MULTIPLIER*2),
+            pos = (-100,-500)
+        )
+        self.add_widget(self.background)
+
         # CELLO HERO
         self.logo = Image(
             source = "images/cellohero.png",
@@ -833,6 +852,9 @@ class MainWidget1(BaseWidget):
             allow_stretch = True
         )
         self.add_widget(self.bear)
+
+        self.objects = AnimGroup()
+        self.canvas.add(self.objects)
 
         self.reset_button = None
         self.replay_button = None
@@ -859,7 +881,7 @@ class MainWidget1(BaseWidget):
         if (self.bear):
             self.position_bear(len(self.buttons) > 0) # hack to know on main screen
 
-            
+
         # buttons
         navigation_button_size = (Window.width/4, Window.height/3)
         naviation_button_font_size = Window.height/20
@@ -871,7 +893,7 @@ class MainWidget1(BaseWidget):
             self.replay_button.size = navigation_button_size
             self.replay_button.pos = (Window.width - navigation_button_size[0] - padding, padding)
             self.replay_button.font_size = naviation_button_font_size
-        
+
         button_num = 0
         for button in self.buttons:
             button.size = (Window.width/4, (Window.height - 2 * padding - .5 * padding * len(self.buttons))/len(self.buttons))
@@ -887,7 +909,7 @@ class MainWidget1(BaseWidget):
             print("here")
             self.info.font_size = Window.height/20
             self.info.pos = (Window.width/15, 7/8*Window.height)
-            
+
 
     def position_bear(self, is_main_menu):
         if (is_main_menu):
@@ -1011,7 +1033,7 @@ class MainWidget1(BaseWidget):
             self.add_widget(self.info)
 
         self.buttons = []
-        
+
         self.create_button('C Major Scale', 'cmaj', (0,0))
         self.create_button('Mary Had a Little Lamb', 'mary', (0,0))
         self.create_button('Rigadoon', 'rigadoon', (0,0))
