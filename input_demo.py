@@ -802,8 +802,11 @@ class MainWidget1(BaseWidget):
         self.playback_wav = None
 
         self.state = START_MENU
-        self.info = topleft_label()
-        self.info.text = ""
+
+        self.bear_size = 500
+        self.padding = Window.height/20
+
+        self.info = Label(text= "", pos = (self.padding, Window.height - self.padding), font_size = 40, font_name = self.FONT_NAME)
         self.add_widget(self.info)
 
         self.objects = AnimGroup()
@@ -813,10 +816,6 @@ class MainWidget1(BaseWidget):
         self.song_data = None
         self.display = None
         self.cellist = None
-
-        self.bear_size = 500
-        self.padding = Window.height/20
-
         
         # CELLO HERO
         self.logo = Image(
@@ -879,6 +878,16 @@ class MainWidget1(BaseWidget):
             button.pos = (padding, padding + button_num * (button.size[1]+.5 *padding))
             button.font_size = Window.height/30
             button_num += 1
+
+        # labels
+        if (self.score_label):
+            self.score_label.font_size = Window.height/10
+            self.score_label.pos  =  (Window.width/2, Window.height/2)
+        if (self.info):
+            print("here")
+            self.info.font_size = Window.height/20
+            self.info.pos = (Window.width/15, 7/8*Window.height)
+            
 
     def position_bear(self, is_main_menu):
         if (is_main_menu):
