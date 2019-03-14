@@ -782,6 +782,8 @@ START_MENU = "start"
 IN_GAME = "game"
 END_GAME = "end"
 class MainWidget1(BaseWidget):
+    BUTTON_IMAGE = "black_button_image.png"
+    FONT_NAME = "fonts/Sniglet/Sniglet-Regular.ttf"
     def __init__(self):
         super(MainWidget1, self).__init__()
 
@@ -854,14 +856,12 @@ class MainWidget1(BaseWidget):
             self.logo.size = ((Window.width - 4 * padding)/2, Window.height/4)
             self.logo.pos = ((Window.width - self.logo.size[0])/2, 3*Window.height/4)
 
-
         # bear icon
         if (self.bear):
             self.position_bear(len(self.buttons) > 0) # hack to know on main screen
 
             
         # buttons
-        
         navigation_button_size = (Window.width/4, Window.height/3)
         naviation_button_font_size = Window.height/20
         if (self.reset_button):
@@ -875,8 +875,8 @@ class MainWidget1(BaseWidget):
         
         button_num = 0
         for button in self.buttons:
-            button.size = (Window.width/4, (Window.height - 2 * padding)/len(self.buttons))
-            button.pos = (padding, padding + button_num * button.size[1])
+            button.size = (Window.width/4, (Window.height - 2 * padding - .5 * padding * len(self.buttons))/len(self.buttons))
+            button.pos = (padding, padding + button_num * (button.size[1]+.5 *padding))
             button.font_size = Window.height/30
             button_num += 1
 
@@ -892,7 +892,7 @@ class MainWidget1(BaseWidget):
 
 
     def create_button(self, text, id, pos):
-        button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40)
+        button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME) # many of these are rewritten by resize function
         button.bind(state= self.select_song_callback)
         self.add_widget(button)
         self.buttons.append(button)
@@ -943,7 +943,7 @@ class MainWidget1(BaseWidget):
         # game -> end screen
         self.state = END_GAME
 
-        self.score_label = Label(text= "Score: %d\n" % score, pos = (Window.width/2, Window.height/2), font_size = "40sp")
+        self.score_label = Label(text= "Score: %d\n" % score, pos = (Window.width/2, Window.height/2), font_size = 40, font_name = self.FONT_NAME)
         self.add_widget(self.score_label)
 
         if self.info:
@@ -962,11 +962,11 @@ class MainWidget1(BaseWidget):
         self.display = None
         self.cellist = None
 
-        self.reset_button = Button(text='Main Menu', pos=(0,100), size=(500,200), font_size=40)
+        self.reset_button = Button(text='Main Menu', pos=(0,100), size=(500,200), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME)
         self.reset_button.bind(state= self.reset_callback)
         self.add_widget(self.reset_button)
 
-        self.replay_button = Button(text='Play Again', id=self.song_name, pos=(1100,100), size=(500,200), font_size=40)
+        self.replay_button = Button(text='Play Again', id=self.song_name, pos=(1100,100), size=(500,200), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME)
         self.replay_button.bind(state=self.select_song_callback)
         self.add_widget(self.replay_button)
 
