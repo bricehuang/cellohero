@@ -38,6 +38,8 @@ import numpy as np
 
 NUM_CHANNELS = 1
 
+RESIZE_MULTIPLIER = 1.6
+
 class PitchDetector(object):
     def __init__(self):
         super(PitchDetector, self).__init__()
@@ -133,21 +135,27 @@ class IOBuffer(object):
         self.buffer = None
         return tmp, True
 
-NOTE_SPEED = 200
+NOTE_SPEED = 200 * RESIZE_MULTIPLIER
 
-STAFF_LEFT_X = 100
-BIG_BLACK_BOX_X = 250
-NOW_BAR_X = 500
-PADDING = 100
-NOW_BAR_VERT_OVERHANG = 100
-NOTE_RECT_MARGIN = 2
+STAFF_LEFT_X = 100 * RESIZE_MULTIPLIER
+BIG_BLACK_BOX_X = 250 * RESIZE_MULTIPLIER
+NOW_BAR_X = 500 * RESIZE_MULTIPLIER
+PADDING = 100 * RESIZE_MULTIPLIER
+NOW_BAR_VERT_OVERHANG = 100 * RESIZE_MULTIPLIER
+NOTE_RECT_MARGIN = 2 * RESIZE_MULTIPLIER
 
 MIDDLE_C_ID = 28
 E2_ID = 16
-LANE_HEIGHT = 50
+LANE_HEIGHT = 50 * RESIZE_MULTIPLIER
 LANE_SEP = LANE_HEIGHT/2
-STAFF_Y_VALS = (500,550,600,650,700)
-MID_C_LOWER_Y = STAFF_Y_VALS[-1]+LANE_SEP
+STAFF_Y_VALS = (
+    500 * RESIZE_MULTIPLIER,
+    550 * RESIZE_MULTIPLIER,
+    600 * RESIZE_MULTIPLIER,
+    650 * RESIZE_MULTIPLIER,
+    700 * RESIZE_MULTIPLIER
+)
+MID_C_LOWER_Y = STAFF_Y_VALS[-1] + LANE_SEP
 
 NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
 
@@ -300,7 +308,7 @@ class FeedbackArrow(InstructionGroup):
         self.last_heard_pitches = self.last_heard_pitches[-self.number_last_pitches_to_consider:]
 
 
-LEDGER_LINE_WIDTH = 55
+LEDGER_LINE_WIDTH = 55 * RESIZE_MULTIPLIER
 class LedgerLine(InstructionGroup):
     def __init__(self, note, left_px):
         super(LedgerLine, self).__init__()
@@ -324,7 +332,7 @@ class LedgerLine(InstructionGroup):
         else:
             return [LedgerLine(note2, left_px) for note2 in range(E2_ID, note-1, -2)]
 
-STEM_LENGTH=75
+STEM_LENGTH=75 * RESIZE_MULTIPLIER
 class NoteFigure(InstructionGroup):
 
     @staticmethod
@@ -344,15 +352,13 @@ class NoteFigure(InstructionGroup):
         elif dur == 3 and not down:
             return np.array((0,3))
         elif dur == 2 and down:
-            return np.array((0,-90))
+            return np.array((0,-140))
         elif dur == 2 and not down:
-            return np.array((0,3))
-        elif dur == 1.5 and down:
-            return np.array((0,-95))
+            return np.array((0,-155))
         elif dur == 1.5 and not down:
             return np.array((-5,2))
         elif dur == 1 and down:
-            return np.array((-22,-100))
+            return np.array((-22,-155))
         elif dur == 1 and not down:
             return np.array((-18,-12))
         elif dur == 0.5 and down:
@@ -384,12 +390,12 @@ class NoteFigure(InstructionGroup):
         self.dur = round(duration_beats, 1)
         self.note = note
         self.add(Color(.8,.8,.2))
-        self.pos = np.array((left_px + 3, note_to_lower_left(note) + 3))
+        self.pos = np.array((left_px, note_to_lower_left(note)))
 
         # if duration_beats == 4:
         texture = NoteFigure.get_image(self.dur, self.note)
-        pos = self.pos + NoteFigure.note_offset(self.dur, self.note)
-        size = NoteFigure.note_size(self.dur, self.note)
+        pos = self.pos + NoteFigure.note_offset(self.dur, self.note) * RESIZE_MULTIPLIER
+        size = NoteFigure.note_size(self.dur, self.note) * RESIZE_MULTIPLIER
 
         self.body = Rectangle(
             texture = texture,
@@ -776,7 +782,7 @@ START_MENU = "start"
 IN_GAME = "game"
 END_GAME = "end"
 class MainWidget1(BaseWidget):
-    BEAR_SIZE = 500
+    BEAR_SIZE = 500 * RESIZE_MULTIPLIER
     def __init__(self):
         super(MainWidget1, self).__init__()
 
@@ -810,8 +816,8 @@ class MainWidget1(BaseWidget):
         # CELLO HERO
         self.logo = Image(
             source = "images/cellohero.png",
-            size = (Window.width/2, Window.height/4),
-            pos = (Window.width/4, Window.height*2/3)
+            size = (Window.width/2 * RESIZE_MULTIPLIER, Window.height/4 * RESIZE_MULTIPLIER),
+            pos = (Window.width/4 * RESIZE_MULTIPLIER, Window.height*2/3 * RESIZE_MULTIPLIER)
         )
         self.add_widget(self.logo)
 
@@ -819,7 +825,7 @@ class MainWidget1(BaseWidget):
         self.bear = Image(
             source = "images/going_to_practice_bear.gif",
             size = (self.BEAR_SIZE, self.BEAR_SIZE),
-            pos = (Window.width/2 - self.BEAR_SIZE/2, Window.height/4)
+            pos = (Window.width/2 * RESIZE_MULTIPLIER - self.BEAR_SIZE/2, Window.height/4 * RESIZE_MULTIPLIER)
         )
         self.add_widget(self.bear)
 
@@ -830,7 +836,7 @@ class MainWidget1(BaseWidget):
         self.reset()
 
     def create_button(self, text, id, pos):
-        button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40)
+        button = Button(text=text, id=id, pos=pos, size=(500 * RESIZE_MULTIPLIER,300 * RESIZE_MULTIPLIER), font_size=40 * RESIZE_MULTIPLIER)
         button.bind(state= self.select_song_callback)
         self.add_widget(button)
         self.buttons.append(button)
@@ -939,10 +945,10 @@ class MainWidget1(BaseWidget):
 
         self.buttons = []
         self.create_button('C Major Scale', 'cmaj', (0,0))
-        self.create_button('Mary Had a Little Lamb', 'mary', (500,0))
-        self.create_button('Rigadoon', 'rigadoon', (1000,0))
-        self.create_button('Open Strings', 'open_strings', (0, 400))
-        self.create_button('Bach Prelude', 'bach', (1000,400))
+        self.create_button('Mary Had a Little Lamb', 'mary', (500 * RESIZE_MULTIPLIER,0))
+        self.create_button('Rigadoon', 'rigadoon', (1000 * RESIZE_MULTIPLIER,0))
+        self.create_button('Open Strings', 'open_strings', (0, 400 * RESIZE_MULTIPLIER))
+        self.create_button('Bach Prelude', 'bach', (1000 * RESIZE_MULTIPLIER, 400 * RESIZE_MULTIPLIER))
 
         self.stop_sound_playback()
 
