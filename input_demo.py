@@ -826,8 +826,7 @@ class MainWidget1(BaseWidget):
         self.bear_size = 500
         self.padding = Window.height/20
 
-        self.info = Label(text= "", pos = (self.padding, Window.height - self.padding), font_size = 40, font_name = self.FONT_NAME)
-        self.add_widget(self.info)
+        
 
         self.score = 0
         self.song_data = None
@@ -842,6 +841,10 @@ class MainWidget1(BaseWidget):
             allow_stretch = True
         )
         self.add_widget(self.background)
+
+        # load score
+        self.info = Label(text= "", pos = (self.padding, Window.height - self.padding), font_size = 40, font_name = self.FONT_NAME)
+        self.add_widget(self.info)
 
         # CELLO HERO
         self.logo = Image(
