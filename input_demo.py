@@ -802,7 +802,7 @@ BASS_MASK_DIMS = (412,1000)
 BASS_MASK_POS = (0,400)
 
 class MainWidget1(BaseWidget):
-    BUTTON_IMAGE = "black_button_image.png"
+    BUTTON_IMAGE = "images/redder_button_image.png"
     FONT_NAME = "fonts/Sniglet/Sniglet-Regular.ttf"
     def __init__(self):
         super(MainWidget1, self).__init__()
