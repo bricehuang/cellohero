@@ -176,68 +176,57 @@ class FeedbackArrow(InstructionGroup):
         self.last_heard_pitches = []
 
         # arrow
-        self.horiz_position = NOW_BAR_X - 100
+        self.horiz_position = NOW_BAR_X - 200
         self.vert_position = Window.height/2 # can start in any position
         self.size = (100, 50)
         self.arrow = CRectangle(texture = Image(source = 'images/white_arrow.png').texture, cpos=(self.horiz_position, self.vert_position), csize=self.size)
 
-        self.color = Color(1,0,0,0)
-
-
-        # accidental
-        accidental_size = (self.size[1], self.size[1])
-        self.accidental_horiz_position = self.horiz_position - .5 * self.size[1] - 100
-        self.accidental = CRectangle(cpos = (self.accidental_horiz_position, self.vert_position), csize = accidental_size)
-
-        self.accidental_color = Color(1,0,0,1)
+        self.color = Color(1,1,1,0)
 
         # rotations
         self.angle = 0
-        rotation_origin = (self.arrow.get_cpos()[0] + self.size[0], self.arrow.get_cpos()[1] + self.size[1] * .5, ) #furtherest right
-        self.rotation = Rotate(axis = (0,0,1), angle= self.angle, origin = rotation_origin)
-        self.anti_rotation = Rotate(axis = (0,0,1), angle= - self.angle, origin = rotation_origin)
+        self.rotation_origin = self.update_rotation_origin(False) 
+        self.rotation = Rotate(axis = (0,0,1), angle= self.angle, origin = self.rotation_origin)
+        self.anti_rotation = Rotate(axis = (0,0,1), angle= - self.angle, origin = self.rotation_origin)
 
         # adding to canvas
         self.add(self.rotation)
         self.add(self.color)
         self.add(self.arrow)
-        self.add(self.accidental_color)
-        self.add(self.accidental)
         self.add(self.anti_rotation)
+
+        self.offset = self.arrow.csize[1]/2
 
     def set_visible(self):
         self.color.a = 1
 
     def set_invisible(self):
         self.color.a = 0
-        self.accidental_color.a = 0
-
-    def set_accidental_visible(self, isSharp): # isSharp is boolean indicating either sharp or natural
-        self.accidental_color.a = 1
-        if isSharp:
-            self.accidental.texture = Image(source = 'images/white_sharp.png').texture
-        else:
-            self.accidental.texture = Image(source = 'images/white_natural.png').texture
 
     def set_red(self):
         self.color.rgb = (1,0,0)
-        self.accidental_color.rgb = (1,0,0)
 
     def set_green(self):
         self.color.rgb = (0,1,0)
-        self.accidental_color.rgb = (0,1,0)
+
+    def set_black(self):
+        self.color.rgb = (1,1,1)
 
     def set_white(self):
         self.color.rgb = (1,1,1)
-        self.accidental_color.rgb = (1,1,1)
 
-    def set_accidental_invisible(self):
-        self.accidental_color.a = 0
+    def update_rotation_origin(self, update_rotation_objects = True):
+        self.rotation_origin = (self.arrow.get_cpos()[0] + .5 * self.arrow.csize[0], self.arrow.get_cpos()[1]) #furtherest right
+        if(update_rotation_objects):
+            self.rotation.origin = self.rotation_origin
+            self.anti_rotation.origin = self.rotation_origin
+        return self.rotation_origin
 
     def set_vertical_position(self, y_pos):
-        self.vert_position = y_pos
+        self.vert_position = y_pos + self.offset
         self.arrow.cpos = (self.horiz_position, self.vert_position)
-        self.accidental.cpos = (self.accidental_horiz_position, self.vert_position)
+        self.update_rotation_origin()
+
 
     def set_rotation(self, angle = 0):
         self.arrow.angle = angle
@@ -247,62 +236,47 @@ class FeedbackArrow(InstructionGroup):
 
     def on_update(self, dt, current_expected_note, pitch_heard):
         # ignore outliers to provent sporadic movement
-        if len(self.last_heard_pitches) < self.number_last_pitches_to_consider or abs(pitch_heard - np.mean(self.last_heard_pitches)) < self.outlier_pitch_amt:
+        if not current_expected_note:
+            self.set_invisible()
+            #self.last_heard_pitches = []
 
-            if pitch_heard > 35: # only display cello range notes
-                self.set_visible()
-                self.set_rotation() # reset orientation to 0
+        # consider whether or not this is an outlier pitch
+        elif len(self.last_heard_pitches) < self.number_last_pitches_to_consider or abs(pitch_heard - np.mean(self.last_heard_pitches)) < self.outlier_pitch_amt:
 
-                # get the position of the note
-                if current_expected_note and abs(current_expected_note.pitch - pitch_heard) < 1:  # these are cases which could round away to other positions
-                    # they are on the same line
-                    position = current_expected_note.noteid
-                    sharp_needed = current_expected_note.acc == '#'
-                else:
-                    pitch_heard_closest = int(pitch_heard)
-                    # MIDI_TO_NOTE = {0:'C', 2:'D', 4:'E', 5:'F', 7:'G', 9:'A', 11:'B'}
-                    if pitch_heard_closest % 12 in MIDI_TO_NOTE:
-                        sharp_needed = False
-                        midi_note = MIDI_TO_NOTE[pitch_heard_closest % 12]
-                        octave = math.floor(pitch_heard_closest/12)
-                    else:
-                        sharp_needed = True
-                        midi_note = MIDI_TO_NOTE[(pitch_heard_closest - 1) % 12]
-                        octave = math.floor((pitch_heard_closest - 1)/12)
-                    position = NOTE_TO_ID[midi_note] + (octave - 1) * NOTES_IN_OCTAVE
-
+            if pitch_heard > 35 and current_expected_note: # only display cello range notes
+                
+                #  set position
+                position = current_expected_note.noteid
                 place_here = note_to_lower_left(position)
-                self.set_vertical_position(place_here + LANE_SEP)
+                self.set_vertical_position(place_here)
+                self.set_rotation(90)
+                pitch_diff = current_expected_note.pitch - pitch_heard
+                # set angle (more dramatic angle change when closer)
+                if abs(pitch_diff) < 1: # within half step of correct note
+                    angle = np.interp(pitch_diff, (-1, 1), (-45,45))
+                    self.set_rotation(angle)
 
-                natural_needed = False
-                if current_expected_note:
-                    if abs(current_expected_note.pitch - pitch_heard) < 1: # within half step of correct note
-                        angle = np.interp(current_expected_note.pitch - pitch_heard, (-1, 1), (-90,90))
-                        self.set_rotation(angle)
-                        if abs(current_expected_note.pitch - pitch_heard) <= ACCEPTABLE_PITCH_INTERVAL:
-                            self.set_green()
-                        else:
-                            self.set_red()
+                    if abs(current_expected_note.pitch - pitch_heard) <= ACCEPTABLE_PITCH_INTERVAL:
+                        self.set_green()
                     else:
-                        # heard pitch and expected pitch displayed on same line
-                        # will already show the sharp, but need to show natural in this case
                         self.set_red()
-                        if position == current_expected_note.noteid and not sharp_needed:
-                            natural_needed = True
                 else:
-                    self.set_white()
-
-                # turn on/off sharp sign if necessary (important, must happen after color changes):
-                if(sharp_needed):
-                    self.set_accidental_visible(True)
-                elif(natural_needed):
-                    self.set_accidental_visible(False)
-                else:
-                    self.set_accidental_invisible()
-
+                    # heard pitch and expected pitch displayed on same line
+                    # will already show the sharp, but need to show natural in this case
+                    self.set_red()
+                    max_half_steps_away = 8
+                    if pitch_diff < 0: # negative
+                        angle = np.interp(pitch_diff, (-max_half_steps_away, 0), (-90,-45))
+                        if(pitch_diff < -max_half_steps_away):
+                            angle = -90
+                    else:
+                        angle = np.interp(pitch_diff, (0, max_half_steps_away), (45,90))
+                        if(pitch_diff > max_half_steps_away):
+                            angle = 90
+                    self.set_rotation(angle)
+                self.set_visible()
             else:
                 self.set_invisible()
-                self.set_accidental_invisible()
 
         self.last_heard_pitches.append(pitch_heard)
         self.last_heard_pitches = self.last_heard_pitches[-self.number_last_pitches_to_consider:]
