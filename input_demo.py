@@ -616,8 +616,9 @@ class BeatMatchDisplay(InstructionGroup):
         )
 
         # draw bass clef
-        self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(BIG_BLACK_BOX_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
-        self.add(self.bassClef)
+        # self.bassClef = Rectangle(source = "bass_clef_blob.png", pos=(0,0), size=(412,1800))
+        # self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(BIG_BLACK_BOX_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
+        # self.add(self.bassClef)
 
         # add intonation adjustion arrows
         # ARROW_BUFFER = 200
@@ -795,6 +796,11 @@ class SongData(object):
 START_MENU = "start"
 IN_GAME = "game"
 END_GAME = "end"
+SCREEN_DIMS = (3080,2000)
+BG_OFFSET = (-100,0)
+BASS_MASK_DIMS = (412,1000)
+BASS_MASK_POS = (0,400)
+
 class MainWidget1(BaseWidget):
     BUTTON_IMAGE = "black_button_image.png"
     FONT_NAME = "fonts/Sniglet/Sniglet-Regular.ttf"
@@ -830,9 +836,10 @@ class MainWidget1(BaseWidget):
 
         # Background
         self.background = Image(
-            source = "images/parchment.png",
-            size = (Window.width * RESIZE_MULTIPLIER*2, Window.height * RESIZE_MULTIPLIER*2),
-            pos = (-100,-500)
+            source = "images/parchment2.png",
+            size = SCREEN_DIMS,
+            pos = BG_OFFSET,
+            allow_stretch = True
         )
         self.add_widget(self.background)
 
@@ -855,6 +862,12 @@ class MainWidget1(BaseWidget):
 
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
+
+        self.bassclef = Image(
+            source = "images/bassclef2.png",
+            size = BASS_MASK_DIMS,
+            pos = BASS_MASK_POS
+        )
 
         self.reset_button = None
         self.replay_button = None
@@ -906,7 +919,6 @@ class MainWidget1(BaseWidget):
             self.score_label.font_size = Window.height/10
             self.score_label.pos  =  (Window.width/2, Window.height/2)
         if (self.info):
-            print("here")
             self.info.font_size = Window.height/20
             self.info.pos = (Window.width/15, 7/8*Window.height)
 
@@ -951,6 +963,8 @@ class MainWidget1(BaseWidget):
         self.cellist = Cellist(self.display, self.update_score, self.end_song, self.set_bear)
         self.objects.add(self.display)
 
+        self.add_widget(self.bassclef)
+
         # stop playing playback
         self.stop_sound_playback()
 
@@ -987,6 +1001,8 @@ class MainWidget1(BaseWidget):
             self.bear.source = "images/okay_bear.gif"
         elif rating == 3:
             self.bear.source = "images/clapping_bear.gif"
+
+        self.remove_widget(self.bassclef)
 
         self.objects.remove(self.display)
         self.song_data = None
