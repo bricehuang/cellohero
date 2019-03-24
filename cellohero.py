@@ -39,8 +39,6 @@ import numpy as np
 
 NUM_CHANNELS = 1
 
-RESIZE_MULTIPLIER = 1.6
-
 class PitchDetector(object):
     def __init__(self):
         super(PitchDetector, self).__init__()
@@ -136,36 +134,53 @@ class IOBuffer(object):
         self.buffer = None
         return tmp, True
 
-NOTE_SPEED = 200 * RESIZE_MULTIPLIER
+def set_global_lengths():
+    # parts sizing
+    global NOW_BAR_VERT_OVERHANG, LANE_HEIGHT, LANE_SEP
+    NOW_BAR_VERT_OVERHANG = Window.height / 10
+    LANE_HEIGHT = Window.height / 25
+    LANE_SEP = LANE_HEIGHT / 2
 
-STAFF_LEFT_X = 100 * RESIZE_MULTIPLIER
-BIG_BLACK_BOX_X = 250 * RESIZE_MULTIPLIER
-NOW_BAR_X = 750 * RESIZE_MULTIPLIER
-PADDING = 100 * RESIZE_MULTIPLIER
-NOW_BAR_VERT_OVERHANG = 100 * RESIZE_MULTIPLIER
-NOTE_RECT_MARGIN = 2 * RESIZE_MULTIPLIER
+    # note speed
+    global NOTE_SPEED
+    NOTE_SPEED = Window.width / 12
+
+    # geography
+    global STAFF_LEFT_X, NOW_BAR_X, STAFF_Y_VALS, MIDDLE_C_Y
+    STAFF_LEFT_X = Window.width / 18
+    NOW_BAR_X = STAFF_LEFT_X + NOTE_SPEED * 4 # TODO: not staff left x
+    STAFF_Y_VALS = tuple(Window.height/2 + i * LANE_HEIGHT for i in range(-2,3))
+    MIDDLE_C_Y = STAFF_Y_VALS[-1] + LANE_HEIGHT
+
+    # note sizing
+    global NOTE_RECT_MARGIN, NOTE_RADIUS, PROGRESS_BAR_RADIUS, NOTE_RADIUS_DOWN, PROGRESS_BAR_RADIUS_DOWN
+    NOTE_RECT_MARGIN = LANE_HEIGHT / 20
+    NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
+    PROGRESS_BAR_RADIUS = LANE_HEIGHT / 20
+    NOTE_RADIUS_DOWN = np.array((0,-NOTE_RADIUS))
+    PROGRESS_BAR_RADIUS_DOWN = np.array((0,-PROGRESS_BAR_RADIUS))
+
+    # ledger lines
+    global LEDGER_LINE_XOFFSET, LEDGER_LINE_LENGTH, LEDGER_LINE_WIDTH
+    LEDGER_LINE_XOFFSET = NOTE_RADIUS / 4
+    LEDGER_LINE_LENGTH = NOTE_RADIUS + 2 * LEDGER_LINE_XOFFSET
+    LEDGER_LINE_WIDTH = PROGRESS_BAR_RADIUS * 2
+
+    # barlines
+    global BARLINE_WIDTH
+    BARLINE_WIDTH = 3
+
+set_global_lengths()
 
 MIDDLE_C_ID = 28
 E2_ID = 16
-LANE_HEIGHT = 50 * RESIZE_MULTIPLIER
-LANE_SEP = LANE_HEIGHT/2
-STAFF_Y_VALS = (
-    500 * RESIZE_MULTIPLIER,
-    550 * RESIZE_MULTIPLIER,
-    600 * RESIZE_MULTIPLIER,
-    650 * RESIZE_MULTIPLIER,
-    700 * RESIZE_MULTIPLIER
-)
-MID_C_LOWER_Y = STAFF_Y_VALS[-1] + LANE_SEP
-
-NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
-
 NOTE_SCORE_RATE = 1000
 PERCENT_NOTE_TO_HIT = .8
 ACCEPTABLE_PITCH_INTERVAL = 0.2
 
-def note_to_lower_left(noteid):
-    return MID_C_LOWER_Y + (noteid - MIDDLE_C_ID)*LANE_SEP
+
+def note_y_coordinate(noteid):
+    return MIDDLE_C_Y + (noteid - MIDDLE_C_ID)*LANE_SEP
 
 class FeedbackArrow(InstructionGroup):
     def __init__(self,):
@@ -186,7 +201,7 @@ class FeedbackArrow(InstructionGroup):
 
         # rotations
         self.angle = 0
-        self.rotation_origin = self.update_rotation_origin(False) 
+        self.rotation_origin = self.update_rotation_origin(False)
         self.rotation = Rotate(axis = (0,0,1), angle= self.angle, origin = self.rotation_origin)
         self.anti_rotation = Rotate(axis = (0,0,1), angle= - self.angle, origin = self.rotation_origin)
 
@@ -245,10 +260,10 @@ class FeedbackArrow(InstructionGroup):
         elif len(self.last_heard_pitches) < self.number_last_pitches_to_consider or abs(pitch_heard - np.mean(self.last_heard_pitches)) < self.outlier_pitch_amt:
 
             if pitch_heard > 35 and current_expected_note: # only display cello range notes
-                
+
                 #  set position
                 position = current_expected_note.noteid
-                place_here = note_to_lower_left(position)
+                place_here = note_y_coordinate(position) - LANE_SEP
                 self.set_vertical_position(place_here)
                 self.set_rotation(90)
                 pitch_diff = current_expected_note.pitch - pitch_heard
@@ -282,32 +297,27 @@ class FeedbackArrow(InstructionGroup):
         self.last_heard_pitches.append(pitch_heard)
         self.last_heard_pitches = self.last_heard_pitches[-self.number_last_pitches_to_consider:]
 
-
-LEDGER_LINE_WIDTH = 55 * RESIZE_MULTIPLIER
-LEDGER_LINE_XOFFSET = -10
 class LedgerLine(InstructionGroup):
     def __init__(self, note, left_px):
         super(LedgerLine, self).__init__()
         assert (note%2 == 0 and (note >= MIDDLE_C_ID or note <= E2_ID))
         self.color = Color(0,0,0)
         self.add(self.color)
-        self.pos = np.array((left_px, note_to_lower_left(note) + LANE_SEP))
-        self.line = Line(points=[
-            self.pos[0]+LEDGER_LINE_XOFFSET,
-            self.pos[1],
-            self.pos[0]+LEDGER_LINE_WIDTH+LEDGER_LINE_XOFFSET,
-            self.pos[1]
-        ],width=4)
+        self.pos = np.array((left_px, note_y_coordinate(note)))
+        self.line = Line(points=self.points(), width=LEDGER_LINE_WIDTH)
         self.add(self.line)
+
+    def points(self):
+        return [
+            self.pos[0] - LEDGER_LINE_XOFFSET,
+            self.pos[1],
+            self.pos[0] - LEDGER_LINE_XOFFSET + LEDGER_LINE_LENGTH,
+            self.pos[1]
+        ]
 
     def on_update(self,dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
-        self.line.points = [
-            self.pos[0]+LEDGER_LINE_XOFFSET,
-            self.pos[1],
-            self.pos[0]+LEDGER_LINE_WIDTH+LEDGER_LINE_XOFFSET,
-            self.pos[1]
-        ]
+        self.line.points = self.points()
 
     @staticmethod
     def get_ledger_lines(note, left_px):
@@ -318,9 +328,7 @@ class LedgerLine(InstructionGroup):
         else:
             return [LedgerLine(note2, left_px) for note2 in range(E2_ID, note-1, -2)]
 
-STEM_LENGTH=75 * RESIZE_MULTIPLIER
 class NoteFigure(InstructionGroup):
-
     @staticmethod
     def get_image(dur, note):
         suffix = '' if dur == 4 else ('-d' if note>22 else '-u')
@@ -331,88 +339,91 @@ class NoteFigure(InstructionGroup):
     @staticmethod
     def note_offset(dur, note):
         down = (note > 22)
+        orientation_multiplier = -1 if down else 1
         if dur == 4:
-            return np.array((-2,-4))
-        elif dur == 3 and down:
-            return np.array((0,-145))
-        elif dur == 3 and not down:
-            return np.array((0,3))
-        elif dur == 2 and down:
-            return np.array((0,-140))
-        elif dur == 2 and not down:
-            return np.array((0,8))
-        elif dur == 1.5 and down:
-            return np.array((0,-155))
-        elif dur == 1.5 and not down:
-            return np.array((-5,8))
-        elif dur == 1 and down:
-            return np.array((-22,-155))
-        elif dur == 1 and not down:
-            return np.array((-18,-12))
+            return np.array((0,0))
+        elif dur == 3:
+            return (
+                np.array((0.450, 1.980)) * orientation_multiplier * NOTE_RADIUS
+                + np.array((0.7*NOTE_RADIUS if down else 0, 1))
+            )
+        elif dur == 2:
+            return np.array((0, 1.980)) * orientation_multiplier * NOTE_RADIUS
+        elif dur == 1.5:
+            return (
+                np.array((0.373, 2.094)) * orientation_multiplier * NOTE_RADIUS
+                + np.array((0.7*NOTE_RADIUS if down else 0, 1))
+            )
+        elif dur == 1:
+            return np.array((0, 1.855)) * orientation_multiplier * NOTE_RADIUS
         elif dur == 0.5 and down:
-            return np.array((0,-138))
+            return np.array((0,-1.663)) * NOTE_RADIUS
         elif dur == 0.5 and not down:
-            return np.array((0,8))
-        return np.array((0,0))
+            return np.array((0.411,1.633)) * NOTE_RADIUS
+        assert False, 'should not get here'
 
     @staticmethod
     def note_size(dur, note):
         if dur == 4:
-            return np.array((55,55))
+            return np.array((2, 2)) * NOTE_RADIUS
         elif dur == 3:
-            return np.array((70,135))
+            return np.array((2.952, 5.544)) * NOTE_RADIUS
         elif dur == 2:
-            return np.array((50,135))
+            return np.array((2, 5.566)) * NOTE_RADIUS
         elif dur == 1.5:
-            return np.array((65,140))
+            return np.array((2.745, 5.500)) * NOTE_RADIUS
         elif dur == 1:
-            return np.array((90,160))
+            return np.array((2, 5.490)) * NOTE_RADIUS
         elif dur == 0.5 and note>22:
-            return np.array((40,130))
+            return np.array((2,4.853)) * NOTE_RADIUS
         elif dur == 0.5 and note <= 22:
-            return np.array((63,130))
-        return np.array((0,0))
+            return np.array((2.822, 4.766)) * NOTE_RADIUS
+        assert False, 'should not get here'
 
     def __init__(self, note, left_px, duration_beats, acc):
         super(NoteFigure, self).__init__()
         self.dur = round(duration_beats, 1)
         self.note = note
         self.add(Color(0,0,0))
-        self.pos = np.array((left_px, note_to_lower_left(note)))
+        self.pos = np.array((left_px+NOTE_RADIUS, note_y_coordinate(note)))
 
-        # if duration_beats == 4:
-        texture = NoteFigure.get_image(self.dur, self.note)
-        pos = self.pos + NoteFigure.note_offset(self.dur, self.note) * RESIZE_MULTIPLIER
-        size = NoteFigure.note_size(self.dur, self.note) * RESIZE_MULTIPLIER
-
-        self.body = Rectangle(
-            texture = texture,
-            pos = pos,
-            size = size
+        self.body = CRectangle(
+            texture = NoteFigure.get_image(self.dur, self.note),
+            cpos = self.body_cpos(),
+            size = NoteFigure.note_size(self.dur, note)
         )
         self.add(self.body)
 
         self.acc = None
         if acc == '#':
-            self.acc = Rectangle(
-                texture=Image(source='images/white_sharp.png').texture,
-                pos = self.pos + np.array((-40,5)),
-                size = np.array((40,40))
+            self.acc = CRectangle(
+                texture = Image(source='images/white_sharp.png').texture,
+                cpos = self.acc_cpos(),
+                size = self.acc_size()
             )
         elif acc == 'b':
-            self.acc = Rectangle(
-                texture=Image(source='images/white_flat.png').texture,
-                pos = self.pos + np.array((-40,5)),
-                size = np.array((40,40))
+            self.acc = CRectangle(
+                texture = Image(source='images/white_flat.png').texture,
+                cpos = self.acc_cpos(),
+                size = self.acc_size()
             )
         if self.acc:
             self.add(self.acc)
 
+    def body_cpos(self):
+        return self.pos + NoteFigure.note_offset(self.dur, self.note)
+
+    def acc_cpos(self):
+        return self.pos + np.array((-1.5*NOTE_RADIUS,0))
+
+    def acc_size(self):
+        return np.array((NOTE_RADIUS,NOTE_RADIUS))
+
     def on_update(self, dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
-        self.body.pos = self.pos + NoteFigure.note_offset(self.dur, self.note)
+        self.body.cpos = self.body_cpos()
         if self.acc:
-            self.acc.pos = self.pos + np.array((-40,5))
+            self.acc.cpos = self.acc_cpos()
 
 # display for a single note at a position
 class NoteDisplay(InstructionGroup):
@@ -439,15 +450,20 @@ class NoteDisplay(InstructionGroup):
         self.is_passed = False
         self.score = 0
 
-        vert_position = note_to_lower_left(noteid)
+        vert_position = note_y_coordinate(noteid)
         horiz_position = NOW_BAR_X + start_time * NOTE_SPEED
 
-        self.pos = np.array([horiz_position, vert_position+NOTE_RECT_MARGIN])
+        self.pos = np.array((horiz_position, vert_position))
+        self.width = duration_time * NOTE_SPEED
 
         self.color = Color(.763,.706,.371)
         self.add(self.color)
 
-        self.rect = RoundedRectangle(radius=[NOTE_RADIUS]*4, pos=self.pos, size=(duration_time*NOTE_SPEED, LANE_HEIGHT-2*NOTE_RECT_MARGIN))
+        self.rect = RoundedRectangle(
+            radius=[NOTE_RADIUS]*4,
+            pos = self.pos + NOTE_RADIUS_DOWN,
+            size=(self.width, 2*NOTE_RADIUS)
+        )
         self.add(self.rect)
 
         # ledger lines
@@ -455,13 +471,27 @@ class NoteDisplay(InstructionGroup):
         for ll in self.ledger_lines:
             self.add(ll)
 
-        # note head
-        self.figure = NoteFigure(self.noteid, self.pos[0], self.duration_beats, self.acc)
+        # note figure
+        self.figure = NoteFigure(self.noteid, self.pos[0]+NOTE_RECT_MARGIN, self.duration_beats, self.acc)
         self.add(self.figure)
-        # self.add(Line(points=[700,750,800,750],width=2))
 
         self.duration_hit = 0
         self.duration_passed = 0
+        self.add(Color(0,0,1))
+        self.progress_rect = RoundedRectangle(
+            radius=[PROGRESS_BAR_RADIUS]*4,
+            pos=self.pos + PROGRESS_BAR_RADIUS_DOWN,
+            size=(self.width, 2*PROGRESS_BAR_RADIUS)
+        )
+        self.add(self.progress_rect)
+
+        self.add(Color(0,1,0))
+        self.progress_rect_green = RoundedRectangle(
+            radius=[PROGRESS_BAR_RADIUS]*4,
+            pos=self.pos + PROGRESS_BAR_RADIUS_DOWN,
+            size=(self.width * self.score_fraction(), 2*PROGRESS_BAR_RADIUS)
+        )
+        self.add(self.progress_rect_green)
 
         #arrow_buffer = 50
 
@@ -476,27 +506,28 @@ class NoteDisplay(InstructionGroup):
         # self.intonationManager = IntonationManager(up_arrow_position, down_arrow_position)
         # self.add(self.intonationManager)
 
+    def score_fraction(self):
+        return min(1, self.duration_hit/(self.duration_time * 0.8))
 
     def on_hit(self, dt):
         self.status = NoteDisplay.HIT
-        #self.color.rgb = (0,1,0)
         self.duration_passed += dt
         self.duration_hit += dt
 
     def on_pass(self, dt):
         self.status = NoteDisplay.MISSED
-        self.color.rgb = (1,0,0)
         self.duration_passed += dt
 
-    def on_update(self, dt, pitch_heard): 
+    def on_update(self, dt, pitch_heard):
         for ll in self.ledger_lines:
             ll.on_update(dt)
         self.figure.on_update(dt)
 
         self.pos += np.array([-NOTE_SPEED*dt, 0])
-        self.rect.pos = self.pos
-        if self.status == NoteDisplay.HIT:
-            self.color.rgb = (0, min(1, self.duration_hit/self.duration_time * .8 + .4), 0)
+        self.rect.pos = self.pos + NOTE_RADIUS_DOWN
+        self.progress_rect.pos = self.pos + PROGRESS_BAR_RADIUS_DOWN
+        self.progress_rect_green.pos = self.pos + PROGRESS_BAR_RADIUS_DOWN
+        self.progress_rect_green.size = (self.width * self.score_fraction(), 2*PROGRESS_BAR_RADIUS)
 
         # update score (only if current note)
         x_bounds = self.get_x_bounds()
@@ -530,17 +561,13 @@ class NoteDisplay(InstructionGroup):
                 return False
             return self.duration_hit/self.duration_passed >= PERCENT_NOTE_TO_HIT
 
-    def get_center_position(self):
-        return np.array([self.pos[0] + .5 * self.rect.size[0], self.pos[1] - NOTE_RECT_MARGIN])
+    # def get_center_position(self):
+    #     return np.array([self.pos[0] + .5 * self.rect.size[0], self.pos[1] - NOTE_RECT_MARGIN])
 
-    def get_up_arrow_pos(self):
-        return self.up_arrow_position
-    def get_down_arrow_pos(self):
-        return self.down_arrow_position
-
-
-
-
+    # def get_up_arrow_pos(self):
+    #     return self.up_arrow_position
+    # def get_down_arrow_pos(self):
+    #     return self.down_arrow_position
 
 class BarLine(InstructionGroup):
     def __init__(self, time):
@@ -549,20 +576,20 @@ class BarLine(InstructionGroup):
         self.add(self.color)
 
         self.x = NOW_BAR_X + time*NOTE_SPEED
-        self.line = Line(
-            points=[
-                self.x,
-                STAFF_Y_VALS[0],
-                self.x,
-                STAFF_Y_VALS[-1]
-            ],
-            width=3
-        )
+        self.line = Line(points = self.points(), width = BARLINE_WIDTH)
         self.add(self.line)
+
+    def points(self):
+        return [
+            self.x,
+            STAFF_Y_VALS[0],
+            self.x,
+            STAFF_Y_VALS[-1]
+        ]
 
     def on_update(self, dt):
         self.x -= NOTE_SPEED*dt
-        self.line.points = [self.x, STAFF_Y_VALS[0], self.x, STAFF_Y_VALS[-1]]
+        self.line.points = self.points()
 
 SCORE_RED = (191/255.0,0,0,1)
 SCORE_GREY = (231/255, 230/255, 230/255, 1)
@@ -609,14 +636,14 @@ class BeatMatchDisplay(InstructionGroup):
         self.current_score = 0
         note_info = song_data.notes
         bar_info = song_data.barlines
+
         self.score_cb = None
         self.score = 0
-        
 
         # draw staff lines
         self.add(Color(0,0,0))
         for y in STAFF_Y_VALS:
-            self.add(Line(points=[STAFF_LEFT_X,y,Window.width*2,y], width=2))
+            self.add(Line(points=[STAFF_LEFT_X,y,Window.width,y], width=2))
         self.add(Line(
             points=[
                 STAFF_LEFT_X,
@@ -627,7 +654,6 @@ class BeatMatchDisplay(InstructionGroup):
             width=2)
         )
 
-        # self.add(Line(points=[BIG_BLACK_BOX_X,STAFF_Y_VALS[0],BIG_BLACK_BOX_X,STAFF_Y_VALS[-1]], width=2))
         self.notes = []
         for parsed_pitch, start_time, duration in note_info:
             note = NoteDisplay(parsed_pitch, start_time, duration, self.update_score)
@@ -641,9 +667,6 @@ class BeatMatchDisplay(InstructionGroup):
             self.bars.append(bar)
 
         # TODO get the fade
-        # this makes note content disappear once it passes the now bar
-        # self.add(Color(0,0,0))
-        # self.add(Rectangle(pos=(0,0),size=(BIG_BLACK_BOX_X,Window.height-200),texture = Image(source = "images/gradient.png").texture))
 
         # draw now bar
         self.add(Color(0,0,0))
@@ -656,11 +679,6 @@ class BeatMatchDisplay(InstructionGroup):
             ],
             width=2)
         )
-
-        # draw bass clef
-        # self.bassClef = Rectangle(source = "bass_clef_blob.png", pos=(0,0), size=(412,1800))
-        # self.bassClef = Rectangle(texture = Image(source = "white_bass_clef.png").texture, pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]), size=(abs(BIG_BLACK_BOX_X - STAFF_LEFT_X), abs(STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])))
-        # self.add(self.bassClef)
 
         # add intonation adjustion arrows
         # ARROW_BUFFER = 200
@@ -855,8 +873,6 @@ class SongData(object):
 START_MENU = "start"
 IN_GAME = "game"
 END_GAME = "end"
-SCREEN_DIMS = (3080,2000)
-BG_OFFSET = (-100,0)
 BASS_MASK_DIMS = (412,1000)
 BASS_MASK_POS = (0,400)
 
@@ -882,12 +898,11 @@ class MainWidget1(BaseWidget):
 
         self.state = START_MENU
 
-        self.bear_size = 500
+        self.bear_size = 3*Window.height/4
         self.padding = Window.height/20
 
-
         self.score = 0
-        
+
         self.song_data = None
         self.display = None
         self.cellist = None
@@ -895,14 +910,14 @@ class MainWidget1(BaseWidget):
         # Background
         self.background = Image(
             source = "images/parchment2.png",
-            size = SCREEN_DIMS,
-            pos = BG_OFFSET,
+            size = (1.4*Window.width, 1.2*Window.height),
+            pos = (-0.2*Window.width,-0.1*Window.height),
             allow_stretch = True
         )
         self.add_widget(self.background)
 
         # load score
-        self.info = None #label in the top left corner telling the score 
+        self.info = None #label in the top left corner telling the score
         self.add_top_score_box()
 
         # CELLO HERO
@@ -925,11 +940,11 @@ class MainWidget1(BaseWidget):
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
 
-        self.bassclef = Image(
-            source = "images/bassclef2.png",
-            size = BASS_MASK_DIMS,
-            pos = BASS_MASK_POS
-        )
+        # self.bassclef = Image(
+        #     source = "images/bassclef2.png",
+        #     size = BASS_MASK_DIMS,
+        #     pos = BASS_MASK_POS
+        # )
 
         self.reset_button = None
         self.replay_button = None
@@ -984,6 +999,11 @@ class MainWidget1(BaseWidget):
             self.info.font_size = Window.height/12
             self.info.pos = (Window.width/15, 7/8*Window.height)
 
+        # regenerate global lengths
+        if (self.background):
+            self.background.size = (1.4*Window.width, 1.2*Window.height)
+            self.background.pos = (-0.2*Window.width,-0.1*Window.height)
+        set_global_lengths()
 
     def position_bear(self, is_main_menu):
         if (is_main_menu):
@@ -994,7 +1014,6 @@ class MainWidget1(BaseWidget):
             self.bear_size = Window.height/3.5
             self.bear.size = (self.bear_size, self.bear_size)
             self.bear.pos = (Window.width/2 - self.bear_size/2, self.padding)
-
 
     def create_button(self, text, id, pos):
         button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME) # many of these are rewritten by resize function
@@ -1020,7 +1039,7 @@ class MainWidget1(BaseWidget):
         self.position_bear(False)
         self.bear.source = "images/spinning_bear.gif"
 
-        
+
         self.add_top_score_box()
 
         self.score = 0
@@ -1029,7 +1048,7 @@ class MainWidget1(BaseWidget):
         self.cellist = Cellist(self.display, self.update_score, self.end_song, self.set_bear)
         self.objects.add(self.display)
 
-        self.add_widget(self.bassclef)
+        # self.add_widget(self.bassclef)
 
         # stop playing playback
         self.stop_sound_playback()
@@ -1071,7 +1090,7 @@ class MainWidget1(BaseWidget):
         self.score_label = Label(text= "Score\n%d" % score, pos = (Window.width/2, Window.height/2), font_size = 40, font_name = self.FONT_NAME, valign= 'center', halign= 'center', color= SCORE_GREY, outline_color=SCORE_RED, outline_width = 8, texture = Image(source = self.BUTTON_IMAGE).texture)
         self.score_label.texture_update()
         self.add_widget(self.score_label)
-        
+
         self.remove_top_score_box()
 
         if rating == 1:
@@ -1081,7 +1100,7 @@ class MainWidget1(BaseWidget):
         elif rating == 3:
             self.bear.source = "images/clapping_bear.gif"
 
-        self.remove_widget(self.bassclef)
+        # self.remove_widget(self.bassclef)
 
         self.objects.remove(self.display)
         self.song_data = None
