@@ -30,6 +30,7 @@ from kivy.graphics import PushMatrix, PopMatrix, Translate, Scale, Rotate
 from kivy.uix.image import Image
 from kivy.uix.button import Button
 from kivy.uix.label import Label
+from kivy.core.text import Label as CoreLabel
 
 from random import randint
 import aubio
@@ -418,12 +419,13 @@ class NoteDisplay(InstructionGroup):
     LIVE = 'live'
     HIT = 'hit'
     MISSED = 'missed'
-    def __init__(self, parsed_pitch, start_time_and_beats, duration_and_beats):
+    def __init__(self, parsed_pitch, start_time_and_beats, duration_and_beats, score_cb):
         super(NoteDisplay, self).__init__()
         pitch, noteid, acc = parsed_pitch
         self.pitch = pitch
         self.noteid = noteid
         self.acc = acc
+        self.score_cb = score_cb
 
         start_time, start_beats = start_time_and_beats
         self.start_time = start_time
@@ -434,6 +436,8 @@ class NoteDisplay(InstructionGroup):
         self.duration_beats = duration_beats
 
         self.status = NoteDisplay.LIVE
+        self.is_passed = False
+        self.score = 0
 
         vert_position = note_to_lower_left(noteid)
         horiz_position = NOW_BAR_X + start_time * NOTE_SPEED
@@ -484,7 +488,7 @@ class NoteDisplay(InstructionGroup):
         self.color.rgb = (1,0,0)
         self.duration_passed += dt
 
-    def on_update(self, dt):
+    def on_update(self, dt, pitch_heard): 
         for ll in self.ledger_lines:
             ll.on_update(dt)
         self.figure.on_update(dt)
@@ -494,8 +498,28 @@ class NoteDisplay(InstructionGroup):
         if self.status == NoteDisplay.HIT:
             self.color.rgb = (0, min(1, self.duration_hit/self.duration_time * .8 + .4), 0)
 
+        # update score (only if current note)
+        x_bounds = self.get_x_bounds()
+        if x_bounds[0] <= NOW_BAR_X and x_bounds[1] >= NOW_BAR_X:
+            if abs(self.pitch - pitch_heard) < ACCEPTABLE_PITCH_INTERVAL:
+                if(not self.enough_note_hit(True)):
+                    self.score += NOTE_SCORE_RATE * dt
+        if self.just_passed():
+            self.score_cb(self.score)
+
+
     def get_x_bounds(self):
         return (self.pos[0], self.pos[0] + self.duration_time*NOTE_SPEED)
+
+    def note_is_over(self):
+        return self.get_x_bounds()[1] < NOW_BAR_X
+
+    def just_passed(self):
+        # can be called once, once is passed
+        if not self.is_passed and self.note_is_over():
+            self.is_passed = True
+            return True
+        return False
 
     def enough_note_hit(self, out_of_total):
     # percent of note is float, out_of_total is boolean true if out of total duration, false if so far in duration played
@@ -513,6 +537,10 @@ class NoteDisplay(InstructionGroup):
         return self.up_arrow_position
     def get_down_arrow_pos(self):
         return self.down_arrow_position
+
+
+
+
 
 class BarLine(InstructionGroup):
     def __init__(self, time):
@@ -536,14 +564,54 @@ class BarLine(InstructionGroup):
         self.x -= NOTE_SPEED*dt
         self.line.points = [self.x, STAFF_Y_VALS[0], self.x, STAFF_Y_VALS[-1]]
 
+SCORE_RED = (191/255.0,0,0,1)
+SCORE_GREY = (231/255, 230/255, 230/255, 1)
+RED_BORDER = "images/red_border.png"
+
+# class ScoreDisplay(InstructionGroup):
+#     def __init__(self):
+#         super(ScoreDisplay, self).__init__()
+#         self.score = score
+
+#         self.color = Color(1,1,1,1)
+#         self.add(self.color)
+#         self.border = self.score_box = CRectangle(texture = Image(source = RED_BORDER).texture, cpos=(Window.width/2, Window.height/2), csize=(100,100))
+#         self.add(self.border)
+
+#     def set_visible(self):
+#         self.color = (1,1,1,1)
+
+#     def set_invisible(self):
+#         self.color = (1,1,1,0)
+
+#     def set_positions_sizes(self):
+#         if self.state == START_MENU:
+#             self.border.color
+
+#         if self.state == IN_GAME:
+#             self.label.font_size = Window.height/12
+#             self.label.pos = (Window.width/15, 7/8*Window.height)
+
+#         if self.state == END_GAME:
+#             self.label.font_size = Window.height/12
+#             self.label.pos  =  (Window.width/2, Window.height/2)
+
+#     def on_update(self, dt):
+#         pass
+
+
 class BeatMatchDisplay(InstructionGroup):
     def __init__(self, song_data):
         # note_info is List[(parsed_pitch, start_time, duration)]
         super(BeatMatchDisplay, self).__init__()
         self.max_score = song_data.max_score
+        self.cur_pitch = 0
+        self.current_score = 0
         note_info = song_data.notes
         bar_info = song_data.barlines
-
+        self.score_cb = None
+        self.score = 0
+        
 
         # draw staff lines
         self.add(Color(0,0,0))
@@ -562,7 +630,7 @@ class BeatMatchDisplay(InstructionGroup):
         # self.add(Line(points=[BIG_BLACK_BOX_X,STAFF_Y_VALS[0],BIG_BLACK_BOX_X,STAFF_Y_VALS[-1]], width=2))
         self.notes = []
         for parsed_pitch, start_time, duration in note_info:
-            note = NoteDisplay(parsed_pitch, start_time, duration)
+            note = NoteDisplay(parsed_pitch, start_time, duration, self.update_score)
             self.add(note)
             self.notes.append(note)
 
@@ -619,7 +687,7 @@ class BeatMatchDisplay(InstructionGroup):
     def on_update(self, dt) :
         # update all components that animate
         for note in self.notes:
-            note.on_update(dt)
+            note.on_update(dt, self.cur_pitch)
 
         #self.intonationDisplay.on_update(dt)
 
@@ -646,20 +714,34 @@ class BeatMatchDisplay(InstructionGroup):
     def enough_note_hit(self, gem_idx, out_of_total):
         return self.notes[gem_idx].enough_note_hit(out_of_total)
 
+    def notify_pitch(self, pitch):
+        self.cur_pitch = pitch
+
+    def update_score(self, score_addition):
+        self.score += score_addition
+        if self.score_cb:
+            self.score_cb(self.score, score_addition)
+
+
 GOOD_CUTOFF = 0.6
 EXCELLENT_CUTOFF = 0.9
 class Cellist(object):
     def __init__(self, display, score_cb, end_game_cb, update_bear_cb):
         super(Cellist, self).__init__()
         self.display = display
-        self.cur_pitch = 0
+        self.cur_pitch = 0 # current pitch being played by cellist, not necessarily what is supposed to be played.
+        self.cur_note_idx = 0
         self.score = 0
         self.score_cb = score_cb
         self.end_game_cb = end_game_cb
         self.update_bear_cb = update_bear_cb
 
+        #set callback for display
+        self.display.score_cb = self.update_score
+
     def notify_pitch(self, pitch):
         self.cur_pitch = pitch
+        self.display.notify_pitch(self.cur_pitch)
 
     def on_update(self):
         NUM_HISTORIC_NOTES_TO_CONSIDER = 5
@@ -669,11 +751,10 @@ class Cellist(object):
         if current_note is not None:
             idx, pitch = current_note
             pitch_diff = np.abs(pitch - self.cur_pitch)
+
             if pitch_diff < ACCEPTABLE_PITCH_INTERVAL:
-                if not self.display.enough_note_hit(idx, True):
-                    self.score += NOTE_SCORE_RATE * time_passed
-                    self.score_cb(self.score)
-                    self.display.note_hit(idx, time_passed)
+                self.display.note_hit(idx, time_passed)
+
         missed_notes = self.display.missed_notes()
         for idx in missed_notes:
             self.display.note_pass(idx, time_passed)
@@ -689,7 +770,7 @@ class Cellist(object):
             self.end_game_cb(self.score, rating)
 
 
-        current_note = self.display.current_note()
+        #current_note = self.display.current_note() # seems redundant?
         if current_note:
             current_note_index = current_note[0]
             current_note = self.display.notes[current_note[0]]
@@ -712,7 +793,11 @@ class Cellist(object):
                     self.update_bear_cb("heart_bear")
 
         self.display.arrow_feedback.on_update(time_passed, current_note, self.cur_pitch)
+        self.display.on_update(time_passed)
 
+    def update_score(self, total_score, score_addition):
+        self.score = total_score # could change if you want the score over the course of many runs
+        self.score_cb(self.score,  score_addition) # change args for cb
 
 
 PITCHES_IN_OCTAVE = 12
@@ -800,9 +885,9 @@ class MainWidget1(BaseWidget):
         self.bear_size = 500
         self.padding = Window.height/20
 
-        
 
         self.score = 0
+        
         self.song_data = None
         self.display = None
         self.cellist = None
@@ -817,8 +902,8 @@ class MainWidget1(BaseWidget):
         self.add_widget(self.background)
 
         # load score
-        self.info = Label(text= "", pos = (self.padding, Window.height - self.padding), font_size = 40, font_name = self.FONT_NAME)
-        self.add_widget(self.info)
+        self.info = None #label in the top left corner telling the score 
+        self.add_top_score_box()
 
         # CELLO HERO
         self.logo = Image(
@@ -893,10 +978,10 @@ class MainWidget1(BaseWidget):
 
         # labels
         if (self.score_label):
-            self.score_label.font_size = Window.height/10
+            self.score_label.font_size = Window.height/12
             self.score_label.pos  =  (Window.width/2, Window.height/2)
         if (self.info):
-            self.info.font_size = Window.height/20
+            self.info.font_size = Window.height/12
             self.info.pos = (Window.width/15, 7/8*Window.height)
 
 
@@ -935,6 +1020,10 @@ class MainWidget1(BaseWidget):
         self.position_bear(False)
         self.bear.source = "images/spinning_bear.gif"
 
+        
+        self.add_top_score_box()
+
+        self.score = 0
         self.song_data = SongData('music/'+filename+'.txt')
         self.display = BeatMatchDisplay(self.song_data)
         self.cellist = Cellist(self.display, self.update_score, self.end_song, self.set_bear)
@@ -948,6 +1037,8 @@ class MainWidget1(BaseWidget):
         # start recording
         self.recording = True
 
+        self.resize_elements()
+
     def clear_end_screen_buttons(self):
         if self.reset_button:
             self.remove_widget(self.reset_button)
@@ -959,18 +1050,29 @@ class MainWidget1(BaseWidget):
             self.remove_widget(self.score_label)
             self.score_label = None
 
+    def remove_top_score_box(self):
+        if self.info:
+            self.remove_widget(self.info)
+            self.info = None
+
+    def add_top_score_box(self):
+        # TODO
+        if not self.info:
+            #self.info = Label(text= "", font_size = 40, font_name = self.FONT_NAME, valign= 'center', halign= 'center', color= SCORE_GREY, outline_color=SCORE_RED, outline_width = 8, texture = Image(source = self.BUTTON_IMAGE).texture)
+            self.info = Label(text= "", font_size = 40, font_name = self.FONT_NAME, valign= 'center', halign= 'center', color= SCORE_GREY, outline_color=SCORE_RED, outline_width = 8)
+            self.add_widget(self.info)
+
     # called by game logic at game end
     # rating is 1,2,3 (bad, good, excellent)
     def end_song(self, score, rating):
         # game -> end screen
         self.state = END_GAME
 
-        self.score_label = Label(text= "Score: %d\n" % score, pos = (Window.width/2, Window.height/2), font_size = 40, font_name = self.FONT_NAME)
+        self.score_label = Label(text= "Score\n%d" % score, pos = (Window.width/2, Window.height/2), font_size = 40, font_name = self.FONT_NAME, valign= 'center', halign= 'center', color= SCORE_GREY, outline_color=SCORE_RED, outline_width = 8, texture = Image(source = self.BUTTON_IMAGE).texture)
+        self.score_label.texture_update()
         self.add_widget(self.score_label)
-
-        if self.info:
-            self.remove_widget(self.info)
-            self.info = None
+        
+        self.remove_top_score_box()
 
         if rating == 1:
             self.bear.source = "images/cello_smash.gif"
@@ -1019,11 +1121,8 @@ class MainWidget1(BaseWidget):
         # set up buttons
         self.clear_end_screen_buttons()
 
-        # set up text in the corner
-        if not self.info:
-            self.info = topleft_label()
-            self.info.text = ""
-            self.add_widget(self.info)
+        # set up text in the corner/ clear score in the corner
+        self.remove_top_score_box()
 
         self.buttons = []
 
@@ -1037,13 +1136,16 @@ class MainWidget1(BaseWidget):
 
         self.stop_sound_playback()
 
-    def update_score(self, score):
-        self.score = score
+    def update_score(self, total_score, incremental_score):
+        self.score = total_score
 
     def stop_sound_playback(self):
         # stop sound playback (if happening)
         if self.playback_wav:
-            self.mixer.remove(self.playback_wav)
+            try:
+                self.mixer.remove(self.playback_wav)
+            except:
+                print("already removed")
             self.playback_wav = None
             self.live_wave = None
 
@@ -1054,7 +1156,7 @@ class MainWidget1(BaseWidget):
 
             if self.info:
                 # self.info.text = "pitch: %.1f\n" % self.cur_pitch
-                self.info.text = "score: %d\n" % self.score
+                self.info.text = "%d" % self.score
         self.audio.on_update()
 
     def receive_audio(self, frames, num_channels) :
