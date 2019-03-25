@@ -158,7 +158,7 @@ def set_global_lengths():
     NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
     PROGRESS_BAR_RADIUS = LANE_HEIGHT / 20
     NOTE_RADIUS_DOWN = np.array((0,-NOTE_RADIUS))
-    PROGRESS_BAR_RADIUS_DOWN = np.array((0,-PROGRESS_BAR_RADIUS))
+    PROGRESS_BAR_RADIUS_DOWN = np.array((0,-PROGRESS_BAR_RADIUS+LANE_SEP))
 
     # ledger lines
     global LEDGER_LINE_XOFFSET, LEDGER_LINE_LENGTH, LEDGER_LINE_WIDTH
@@ -477,13 +477,13 @@ class NoteDisplay(InstructionGroup):
 
         self.duration_hit = 0
         self.duration_passed = 0
-        self.add(Color(0,0,1))
-        self.progress_rect = RoundedRectangle(
-            radius=[PROGRESS_BAR_RADIUS]*4,
-            pos=self.pos + PROGRESS_BAR_RADIUS_DOWN,
-            size=(self.width, 2*PROGRESS_BAR_RADIUS)
-        )
-        self.add(self.progress_rect)
+        # self.add(Color(0,0,1))
+        # self.progress_rect = RoundedRectangle(
+        #     radius=[PROGRESS_BAR_RADIUS]*4,
+        #     pos=self.pos + PROGRESS_BAR_RADIUS_DOWN,
+        #     size=(self.width, 2*PROGRESS_BAR_RADIUS)
+        # )
+        # self.add(self.progress_rect)
 
         self.add(Color(0,1,0))
         self.progress_rect_green = RoundedRectangle(
@@ -525,7 +525,7 @@ class NoteDisplay(InstructionGroup):
 
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.rect.pos = self.pos + NOTE_RADIUS_DOWN
-        self.progress_rect.pos = self.pos + PROGRESS_BAR_RADIUS_DOWN
+        # self.progress_rect.pos = self.pos + PROGRESS_BAR_RADIUS_DOWN
         self.progress_rect_green.pos = self.pos + PROGRESS_BAR_RADIUS_DOWN
         self.progress_rect_green.size = (self.width * self.score_fraction(), 2*PROGRESS_BAR_RADIUS)
 
