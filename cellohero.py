@@ -146,9 +146,10 @@ def set_global_lengths():
     NOTE_SPEED = Window.width / 12
 
     # geography
-    global STAFF_LEFT_X, NOW_BAR_X, STAFF_Y_VALS, MIDDLE_C_Y
+    global STAFF_LEFT_X, NOW_BAR_X, STAFF_Y_VALS, MIDDLE_C_Y, DISAPPEAR_X
     STAFF_LEFT_X = Window.width / 18
     NOW_BAR_X = STAFF_LEFT_X + NOTE_SPEED * 4 # TODO: not staff left x
+    DISAPPEAR_X = 2/3*NOW_BAR_X 
     STAFF_Y_VALS = tuple(Window.height/2 + i * LANE_HEIGHT for i in range(-2,3))
     MIDDLE_C_Y = STAFF_Y_VALS[-1] + LANE_HEIGHT
 
@@ -315,6 +316,9 @@ class LedgerLine(InstructionGroup):
             self.pos[1]
         ]
 
+    def set_invisible(self):
+        self.color.a = 0
+
     def on_update(self,dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
         self.line.points = self.points()
@@ -384,7 +388,8 @@ class NoteFigure(InstructionGroup):
         super(NoteFigure, self).__init__()
         self.dur = round(duration_beats, 1)
         self.note = note
-        self.add(Color(0,0,0))
+        self.color = Color(0,0,0,1)
+        self.add(self.color)
         self.pos = np.array((left_px+NOTE_RADIUS, note_y_coordinate(note)))
 
         self.body = CRectangle(
@@ -418,6 +423,9 @@ class NoteFigure(InstructionGroup):
 
     def acc_size(self):
         return np.array((NOTE_RADIUS,NOTE_RADIUS))
+
+    def set_invisible(self):
+        self.color.a = 0
 
     def on_update(self, dt):
         self.pos += np.array([-NOTE_SPEED*dt, 0])
@@ -485,7 +493,8 @@ class NoteDisplay(InstructionGroup):
         # )
         # self.add(self.progress_rect)
 
-        self.add(Color(0,1,0))
+        self.progress_color = Color(0,1,0)
+        self.add(self.progress_color)
         self.progress_rect_green = RoundedRectangle(
             radius=[PROGRESS_BAR_RADIUS]*4,
             pos=self.pos + PROGRESS_BAR_RADIUS_DOWN,
@@ -508,6 +517,13 @@ class NoteDisplay(InstructionGroup):
 
     def score_fraction(self):
         return min(1, self.duration_hit/(self.duration_time * 0.8))
+
+    def set_invisible(self):
+        for ll in self.ledger_lines:
+            ll.set_invisible()
+        self.figure.set_invisible()
+        self.color.a = 0 # for the rounded color rectangle
+        self.progress_color.a = 0 # for progress bar
 
     def on_hit(self, dt):
         self.status = NoteDisplay.HIT
@@ -537,6 +553,11 @@ class NoteDisplay(InstructionGroup):
                     self.score += NOTE_SCORE_RATE * dt
         if self.just_passed():
             self.score_cb(self.score)
+
+        # make dissapear
+        if self.pos[0] < DISAPPEAR_X:
+            self.set_invisible()
+
 
 
     def get_x_bounds(self):
@@ -587,9 +608,15 @@ class BarLine(InstructionGroup):
             STAFF_Y_VALS[-1]
         ]
 
+    def set_invisible(self):
+        self.color.a = 0
+
     def on_update(self, dt):
         self.x -= NOTE_SPEED*dt
         self.line.points = self.points()
+
+        if self.x < DISAPPEAR_X:
+            self.set_invisible()
 
 SCORE_RED = (191/255.0,0,0,1)
 SCORE_GREY = (231/255, 230/255, 230/255, 1)
