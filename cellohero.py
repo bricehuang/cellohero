@@ -149,7 +149,7 @@ def set_global_lengths():
     global STAFF_LEFT_X, NOW_BAR_X, STAFF_Y_VALS, MIDDLE_C_Y, DISAPPEAR_X
     STAFF_LEFT_X = Window.width / 18
     NOW_BAR_X = STAFF_LEFT_X + NOTE_SPEED * 4 # TODO: not staff left x
-    DISAPPEAR_X = 2/3*NOW_BAR_X 
+    DISAPPEAR_X = 2/3*NOW_BAR_X
     STAFF_Y_VALS = tuple(Window.height/2 + i * LANE_HEIGHT for i in range(-2,3))
     MIDDLE_C_Y = STAFF_Y_VALS[-1] + LANE_HEIGHT
 
@@ -693,8 +693,6 @@ class BeatMatchDisplay(InstructionGroup):
             self.add(bar)
             self.bars.append(bar)
 
-        # TODO get the fade
-
         # draw now bar
         self.add(Color(0,0,0))
         self.add(Line(
@@ -706,6 +704,14 @@ class BeatMatchDisplay(InstructionGroup):
             ],
             width=2)
         )
+
+        # draw bass clef
+        self.bassClef = Rectangle(
+            texture = Image(source = "white_bass_clef.png").texture,
+            pos=(STAFF_LEFT_X, STAFF_Y_VALS[1]),
+            size=(DISAPPEAR_X - STAFF_LEFT_X, STAFF_Y_VALS[-1] - STAFF_Y_VALS[1])
+        )
+        self.add(self.bassClef)
 
         # add intonation adjustion arrows
         # ARROW_BUFFER = 200
@@ -967,12 +973,6 @@ class MainWidget1(BaseWidget):
         self.objects = AnimGroup()
         self.canvas.add(self.objects)
 
-        # self.bassclef = Image(
-        #     source = "images/bassclef2.png",
-        #     size = BASS_MASK_DIMS,
-        #     pos = BASS_MASK_POS
-        # )
-
         self.reset_button = None
         self.replay_button = None
         self.buttons = []
@@ -1075,8 +1075,6 @@ class MainWidget1(BaseWidget):
         self.cellist = Cellist(self.display, self.update_score, self.end_song, self.set_bear)
         self.objects.add(self.display)
 
-        # self.add_widget(self.bassclef)
-
         # stop playing playback
         self.stop_sound_playback()
 
@@ -1126,8 +1124,6 @@ class MainWidget1(BaseWidget):
             self.bear.source = "images/okay_bear.gif"
         elif rating == 3:
             self.bear.source = "images/clapping_bear.gif"
-
-        # self.remove_widget(self.bassclef)
 
         self.objects.remove(self.display)
         self.song_data = None
