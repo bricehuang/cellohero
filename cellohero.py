@@ -149,14 +149,15 @@ def set_global_lengths():
     global STAFF_LEFT_X, NOW_BAR_X, STAFF_Y_VALS, MIDDLE_C_Y, DISAPPEAR_X
     STAFF_LEFT_X = Window.width / 18
     NOW_BAR_X = STAFF_LEFT_X + NOTE_SPEED * 4 # TODO: not staff left x
-    DISAPPEAR_X = 2/3*NOW_BAR_X
+    DISAPPEAR_X = 1/3*NOW_BAR_X
     STAFF_Y_VALS = tuple(Window.height/2 + i * LANE_HEIGHT for i in range(-2,3))
     MIDDLE_C_Y = STAFF_Y_VALS[-1] + LANE_HEIGHT
 
     # note sizing
-    global NOTE_RECT_MARGIN, NOTE_RADIUS, PROGRESS_BAR_RADIUS, NOTE_RADIUS_DOWN, PROGRESS_BAR_RADIUS_DOWN
+    global NOTE_RECT_MARGIN, NOTE_RADIUS, PROGRESS_BAR_RADIUS, NOTE_RADIUS_DOWN, PROGRESS_BAR_RADIUS_DOWN, ACCIDENTAL_SIZE
     NOTE_RECT_MARGIN = LANE_HEIGHT / 20
     NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
+    ACCIDENTAL_SIZE = 1.5 * NOTE_RADIUS
     PROGRESS_BAR_RADIUS = LANE_HEIGHT / 20
     NOTE_RADIUS_DOWN = np.array((0,-NOTE_RADIUS))
     PROGRESS_BAR_RADIUS_DOWN = np.array((0,-PROGRESS_BAR_RADIUS+LANE_SEP))
@@ -419,10 +420,10 @@ class NoteFigure(InstructionGroup):
         return self.pos + NoteFigure.note_offset(self.dur, self.note)
 
     def acc_cpos(self):
-        return self.pos + np.array((-1.5*NOTE_RADIUS,0))
+        return self.pos + np.array((-2*NOTE_RADIUS,0))
 
     def acc_size(self):
-        return np.array((NOTE_RADIUS,NOTE_RADIUS))
+        return np.array((ACCIDENTAL_SIZE, ACCIDENTAL_SIZE))
 
     def set_invisible(self):
         self.color.a = 0
