@@ -350,14 +350,14 @@ class NoteFigure(InstructionGroup):
         elif dur == 3:
             return (
                 np.array((0.450, 1.980)) * orientation_multiplier * NOTE_RADIUS
-                + np.array((0.7*NOTE_RADIUS if down else 0, 1))
+                + np.array((NOTE_RADIUS if down else 0, 0))
             )
         elif dur == 2:
             return np.array((0, 1.980)) * orientation_multiplier * NOTE_RADIUS
         elif dur == 1.5:
             return (
                 np.array((0.373, 2.094)) * orientation_multiplier * NOTE_RADIUS
-                + np.array((0.7*NOTE_RADIUS if down else 0, 1))
+                + np.array((0.9*NOTE_RADIUS if down else 0, 0))
             )
         elif dur == 1:
             return np.array((0, 1.855)) * orientation_multiplier * NOTE_RADIUS
