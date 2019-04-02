@@ -143,12 +143,12 @@ def set_global_lengths():
 
     # note speed
     global NOTE_SPEED
-    NOTE_SPEED = Window.width / 12
+    NOTE_SPEED = Window.width / 24
 
     # geography
     global STAFF_LEFT_X, NOW_BAR_X, STAFF_Y_VALS, MIDDLE_C_Y, DISAPPEAR_X
     STAFF_LEFT_X = Window.width / 18
-    NOW_BAR_X = STAFF_LEFT_X + NOTE_SPEED * 4 # TODO: not staff left x
+    NOW_BAR_X = STAFF_LEFT_X + NOTE_SPEED * 8 # TODO: not staff left x
     DISAPPEAR_X = 1/3*NOW_BAR_X
     STAFF_Y_VALS = tuple(Window.height/2 + i * LANE_HEIGHT for i in range(-2,3))
     MIDDLE_C_Y = STAFF_Y_VALS[-1] + LANE_HEIGHT
@@ -338,7 +338,6 @@ class NoteFigure(InstructionGroup):
     def get_image(dur, note):
         suffix = '' if dur == 4 else ('-d' if note>22 else '-u')
         img = Image(source = 'notes/' + str(dur) + suffix + '.png')
-        print(img.source)
         return img.texture
 
     @staticmethod
@@ -517,7 +516,7 @@ class NoteDisplay(InstructionGroup):
         # self.add(self.intonationManager)
 
     def score_fraction(self):
-        return min(1, self.duration_hit/(self.duration_time * 0.8))
+        return min(1, self.duration_hit/(self.duration_time / 2 * PERCENT_NOTE_TO_HIT))
 
     def set_invisible(self):
         for ll in self.ledger_lines:
@@ -776,7 +775,7 @@ class BeatMatchDisplay(InstructionGroup):
 
 
 GOOD_CUTOFF = 0.6
-EXCELLENT_CUTOFF = 0.9
+EXCELLENT_CUTOFF = 0.8
 class Cellist(object):
     def __init__(self, display, score_cb, end_game_cb, update_bear_cb):
         super(Cellist, self).__init__()
