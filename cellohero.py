@@ -189,7 +189,7 @@ class FeedbackArrow(InstructionGroup):
         super(FeedbackArrow, self).__init__()
 
         # variables for sensitivity of the arrow
-        self.number_last_pitches_to_consider = 10
+        self.number_last_pitches_to_consider = 5
         self.outlier_pitch_amt = 2
         self.last_heard_pitches = []
 
