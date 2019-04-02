@@ -485,13 +485,6 @@ class NoteDisplay(InstructionGroup):
 
         self.duration_hit = 0
         self.duration_passed = 0
-        # self.add(Color(0,0,1))
-        # self.progress_rect = RoundedRectangle(
-        #     radius=[PROGRESS_BAR_RADIUS]*4,
-        #     pos=self.pos + PROGRESS_BAR_RADIUS_DOWN,
-        #     size=(self.width, 2*PROGRESS_BAR_RADIUS)
-        # )
-        # self.add(self.progress_rect)
 
         self.progress_color = Color(0,1,0)
         self.add(self.progress_color)
@@ -501,19 +494,6 @@ class NoteDisplay(InstructionGroup):
             size=(self.width * self.score_fraction(), 2*PROGRESS_BAR_RADIUS)
         )
         self.add(self.progress_rect_green)
-
-        #arrow_buffer = 50
-
-        # self.up_arrow_position = np.array([
-        #     self.rect.pos[0] + .5 * self.rect.size[0],
-        #     self.rect.pos[1] + .5 * self.rect.size[1] - arrow_buffer])
-        # self.down_arrow_position = np.array([
-        #     self.rect.pos[0] + .5 * self.rect.size[0],
-        #     self.rect.pos[1] + .5 * self.rect.size[1] + arrow_buffer])
-
-        # print ("up: ", up_arrow_position)
-        # self.intonationManager = IntonationManager(up_arrow_position, down_arrow_position)
-        # self.add(self.intonationManager)
 
     def score_fraction(self):
         return min(1, self.duration_hit/(self.duration_time / 2 * PERCENT_NOTE_TO_HIT))
@@ -558,8 +538,6 @@ class NoteDisplay(InstructionGroup):
         if self.pos[0] < DISAPPEAR_X:
             self.set_invisible()
 
-
-
     def get_x_bounds(self):
         return (self.pos[0], self.pos[0] + self.duration_time*NOTE_SPEED)
 
@@ -581,14 +559,6 @@ class NoteDisplay(InstructionGroup):
             if self.duration_passed == 0:
                 return False
             return self.duration_hit/self.duration_passed >= PERCENT_NOTE_TO_HIT
-
-    # def get_center_position(self):
-    #     return np.array([self.pos[0] + .5 * self.rect.size[0], self.pos[1] - NOTE_RECT_MARGIN])
-
-    # def get_up_arrow_pos(self):
-    #     return self.up_arrow_position
-    # def get_down_arrow_pos(self):
-    #     return self.down_arrow_position
 
 class BarLine(InstructionGroup):
     def __init__(self, time):
@@ -621,38 +591,6 @@ class BarLine(InstructionGroup):
 SCORE_RED = (191/255.0,0,0,1)
 SCORE_GREY = (231/255, 230/255, 230/255, 1)
 RED_BORDER = "images/red_border.png"
-
-# class ScoreDisplay(InstructionGroup):
-#     def __init__(self):
-#         super(ScoreDisplay, self).__init__()
-#         self.score = score
-
-#         self.color = Color(1,1,1,1)
-#         self.add(self.color)
-#         self.border = self.score_box = CRectangle(texture = Image(source = RED_BORDER).texture, cpos=(Window.width/2, Window.height/2), csize=(100,100))
-#         self.add(self.border)
-
-#     def set_visible(self):
-#         self.color = (1,1,1,1)
-
-#     def set_invisible(self):
-#         self.color = (1,1,1,0)
-
-#     def set_positions_sizes(self):
-#         if self.state == START_MENU:
-#             self.border.color
-
-#         if self.state == IN_GAME:
-#             self.label.font_size = Window.height/12
-#             self.label.pos = (Window.width/15, 7/8*Window.height)
-
-#         if self.state == END_GAME:
-#             self.label.font_size = Window.height/12
-#             self.label.pos  =  (Window.width/2, Window.height/2)
-
-#     def on_update(self, dt):
-#         pass
-
 
 class BeatMatchDisplay(InstructionGroup):
     def __init__(self, song_data):
@@ -713,16 +651,6 @@ class BeatMatchDisplay(InstructionGroup):
         )
         self.add(self.bassClef)
 
-        # add intonation adjustion arrows
-        # ARROW_BUFFER = 200
-        # up_arrow_positions = []
-        # down_arrow_positions = []
-        # for note in self.notes:
-        #     center_position = note.get_center_position()
-        #     up_arrow_positions.append(center_position - np.array([0, ARROW_BUFFER]))
-        #     down_arrow_positions.append(center_position + np.array([0, ARROW_BUFFER]))
-        # self.intonationDisplay = IntonationDisplay(up_arrow_positions, down_arrow_positions)
-        # self.add(self.intonationDisplay)
         self.arrow_feedback = FeedbackArrow()
         self.add(self.arrow_feedback)
 
@@ -772,7 +700,6 @@ class BeatMatchDisplay(InstructionGroup):
         self.score += score_addition
         if self.score_cb:
             self.score_cb(self.score, score_addition)
-
 
 GOOD_CUTOFF = 0.6
 EXCELLENT_CUTOFF = 0.8
@@ -849,7 +776,6 @@ class Cellist(object):
     def update_score(self, total_score, score_addition):
         self.score = total_score # could change if you want the score over the course of many runs
         self.score_cb(self.score,  score_addition) # change args for cb
-
 
 PITCHES_IN_OCTAVE = 12
 MIDI_ADJ = 12
