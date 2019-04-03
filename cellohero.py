@@ -158,15 +158,15 @@ def set_global_lengths():
     NOTE_RECT_MARGIN = LANE_HEIGHT / 20
     NOTE_RADIUS = LANE_SEP - NOTE_RECT_MARGIN
     ACCIDENTAL_SIZE = 1.5 * NOTE_RADIUS
-    PROGRESS_BAR_RADIUS = LANE_HEIGHT / 20
+    PROGRESS_BAR_RADIUS = NOTE_RADIUS
     NOTE_RADIUS_DOWN = np.array((0,-NOTE_RADIUS))
-    PROGRESS_BAR_RADIUS_DOWN = np.array((0,-PROGRESS_BAR_RADIUS+LANE_SEP))
+    PROGRESS_BAR_RADIUS_DOWN = np.array((0,-PROGRESS_BAR_RADIUS))
 
     # ledger lines
     global LEDGER_LINE_XOFFSET, LEDGER_LINE_LENGTH, LEDGER_LINE_WIDTH
     LEDGER_LINE_XOFFSET = NOTE_RADIUS / 4
     LEDGER_LINE_LENGTH = NOTE_RADIUS * 2 + LEDGER_LINE_XOFFSET * 2
-    LEDGER_LINE_WIDTH = PROGRESS_BAR_RADIUS * 2
+    LEDGER_LINE_WIDTH = 2
 
     # barlines
     global BARLINE_WIDTH
@@ -479,10 +479,6 @@ class NoteDisplay(InstructionGroup):
         for ll in self.ledger_lines:
             self.add(ll)
 
-        # note figure
-        self.figure = NoteFigure(self.noteid, self.pos[0]+NOTE_RECT_MARGIN, self.duration_beats, self.acc)
-        self.add(self.figure)
-
         self.duration_hit = 0
         self.duration_passed = 0
 
@@ -494,6 +490,10 @@ class NoteDisplay(InstructionGroup):
             size=(self.width * self.score_fraction(), 2*PROGRESS_BAR_RADIUS)
         )
         self.add(self.progress_rect_green)
+
+        # note figure
+        self.figure = NoteFigure(self.noteid, self.pos[0]+NOTE_RECT_MARGIN, self.duration_beats, self.acc)
+        self.add(self.figure)
 
     def score_fraction(self):
         return min(1, self.duration_hit/(self.duration_time / 2 * PERCENT_NOTE_TO_HIT))
@@ -969,7 +969,16 @@ class MainWidget1(BaseWidget):
             self.bear.pos = (Window.width/2 - self.bear_size/2, self.padding)
 
     def create_button(self, text, id, pos):
-        button = Button(text=text, id=id, pos=pos, size=(500,300), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME) # many of these are rewritten by resize function
+        button = Button(
+            text=text,
+            id=id,
+            pos=pos,
+            size=(500,300),
+            font_size=40,
+            background_normal = self.BUTTON_IMAGE,
+            font_name = self.FONT_NAME,
+            border=(0,0,0,0),
+        ) # many of these are rewritten by resize function
         button.bind(state= self.select_song_callback)
         self.add_widget(button)
         self.buttons.append(button)
@@ -1056,11 +1065,28 @@ class MainWidget1(BaseWidget):
         self.display = None
         self.cellist = None
 
-        self.reset_button = Button(text='Main Menu', pos=(0,100), size=(500,200), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME)
+        self.reset_button = Button(
+            text='Main Menu',
+            pos=(0,100),
+            size=(500,200),
+            font_size=40,
+            background_normal = self.BUTTON_IMAGE,
+            font_name = self.FONT_NAME,
+            border=(0,0,0,0)
+        )
         self.reset_button.bind(state= self.reset_callback)
         self.add_widget(self.reset_button)
 
-        self.replay_button = Button(text='Play Again', id=self.song_name, pos=(1100,100), size=(500,200), font_size=40, background_normal = self.BUTTON_IMAGE, font_name = self.FONT_NAME)
+        self.replay_button = Button(
+            text='Play Again',
+            id=self.song_name,
+            pos=(1100,100),
+            size=(500,200),
+            font_size=40,
+            background_normal = self.BUTTON_IMAGE,
+            font_name = self.FONT_NAME,
+            border=(0,0,0,0)
+        )
         self.replay_button.bind(state=self.select_song_callback)
         self.add_widget(self.replay_button)
 
