@@ -136,10 +136,11 @@ class IOBuffer(object):
 
 def set_global_lengths():
     # parts sizing
-    global NOW_BAR_VERT_OVERHANG, LANE_HEIGHT, LANE_SEP
-    NOW_BAR_VERT_OVERHANG = Window.height / 10
-    LANE_HEIGHT = Window.height / 25
+    global NOW_BAR_VERT_OVERHANG, LANE_HEIGHT, LANE_SEP, NOW_BAR_WIDTH
+    NOW_BAR_VERT_OVERHANG = Window.height / 8
+    LANE_HEIGHT = Window.height / 20
     LANE_SEP = LANE_HEIGHT / 2
+    NOW_BAR_WIDTH = 5
 
     # note speed
     global NOTE_SPEED
@@ -640,7 +641,7 @@ class BeatMatchDisplay(InstructionGroup):
                 NOW_BAR_X,
                 STAFF_Y_VALS[-1]+NOW_BAR_VERT_OVERHANG
             ],
-            width=2)
+            width=NOW_BAR_WIDTH)
         )
 
         # draw bass clef
@@ -869,9 +870,10 @@ class MainWidget1(BaseWidget):
         # Background
         self.background = Image(
             source = "images/parchment2.png",
-            size = (1.4*Window.width, 1.2*Window.height),
-            pos = (-0.2*Window.width,-0.1*Window.height),
-            allow_stretch = True
+            size = (Window.width, Window.height),
+            pos = (0,0),
+            allow_stretch = True,
+            keep_ratio = False,
         )
         self.add_widget(self.background)
 
@@ -964,9 +966,9 @@ class MainWidget1(BaseWidget):
             self.bear.size = (self.bear_size, self.bear_size)
             self.bear.pos = (2 * self.padding + Window.width/4, self.padding)
         else:
-            self.bear_size = Window.height/3.5
+            self.bear_size = Window.height/4
             self.bear.size = (self.bear_size, self.bear_size)
-            self.bear.pos = (Window.width/2 - self.bear_size/2, self.padding)
+            self.bear.pos = (Window.width/2 - self.bear_size/2, self.padding/2)
 
     def create_button(self, text, id, pos):
         button = Button(
@@ -1120,11 +1122,12 @@ class MainWidget1(BaseWidget):
 
         self.buttons = []
 
-        self.create_button('C Major Scale', 'cmaj', (0,0))
-        self.create_button('Mary Had a Little Lamb', 'mary', (0,0))
-        self.create_button('Rigadoon', 'rigadoon', (0,0))
-        self.create_button('Open Strings', 'open_strings', (0, 400))
-        self.create_button('Bach Prelude', 'bach', (0, 400))
+        # for some reason this is in reverse order
+        self.create_button('Bach Prelude', 'bach', (0, 0))
+        self.create_button('Rigadoon', 'rigadoon', (0, 0))
+        self.create_button('Mary Had a Little Lamb', 'mary', (0, 0))
+        self.create_button('C Major Scale', 'cmaj', (0, 0))
+        self.create_button('Open Strings', 'open_strings', (0, 0))
 
         self.resize_elements()
 
